@@ -1,6 +1,6 @@
 # Transcript Flash Cards
 
-This flash card application helps users learn and test their knowledge based on queestions generated from video transcripts. It generates flashcards using the OpenAI API and provides both study and exam modes. Answers are assessed using the OpenAI API too, so no more wrong answers because of a typo!
+This flash card application helps users learn and test their knowledge based on questions generated from video transcripts. It generates flashcards using the OpenAI API and provides both study and exam modes. Answers are assessed using the OpenAI API too, so no more wrong answers because of a typo!
 
 ## Features
 
