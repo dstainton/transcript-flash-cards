@@ -105,4 +105,34 @@ Open your web browser and navigate to `http://localhost:5000/` to access the app
 - Replace `app.secret_key` with a secure, random value in production.
 - Protect your OpenAI API key and do not expose it in client-side code or public repositories.
 
+## ChatGPT o1-preview Prompt
 
+The first commit for this application was generated with the following prompt:
+
+```bash
+I want to create a flashcard app that:
+- Reads video transcripts from a folder.
+- Creates flash card data in JSON format from the transcript text.
+    - Configurable number of cards per transcript file defaults to the 10 most important pieces of information.
+    - Uses the OpenAI API to submit each transcript with a prompt to generate the JSON data.
+    - Captures topic, question, and answer for each flash card along with the transcript filename.
+    - Questions can require a yes/no response or a written sentence.
+- Presents the cards in random order.
+- Concentrates more on cards that haven't been correctly answered.
+- Retires cards that have been answered correctly three times in a row.
+- Keeps score by topic. All-time and current session. Persists all-time score.
+- Presents the answer after the user clicks the Submit Answer button, or after time expires.
+- Limits time per card to a default 10 seconds, but can be configured.
+- Configurable to work on just one, several, or all topics.
+- Shows cards in a graphical format.
+- Uses the OpenAI API to assess if answers are correct.
+- Has an Exam mode that:
+    - Chooses a configurable number of questions from each topic (min - max).
+    - Has a configurable total time limit rather than a limit per question. Default to 10 minutes.
+    - Assesses responses AFTER all have been attempted rather than one at a time.
+    - Does not present answers after each card, just moves to the next.
+    - Presents a total score at the end of the exam, both in fraction and percentage formats.
+- Has visual controls for all of the things a user would expect.
+
+Please generate the entire application code, with error and exception checking, brief comments, and a user guide in markdown format.
+```

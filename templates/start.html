@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Start Session</title>
+</head>
+<body>
+    <h1>Configure Your Session</h1>
+    <form method="post">
+        <h2>Select Topics:</h2>
+        {% for topic in topics %}
+            <input type="checkbox" name="topics" value="{{ topic }}">{{ topic }}<br>
+        {% endfor %}
+        <h2>Select Mode:</h2>
+        <input type="radio" name="mode" value="study" checked> Study<br>
+        <input type="radio" name="mode" value="exam"> Exam<br>
+        <h2>Time Per Card (seconds):</h2>
+        <input type="number" name="time_per_card" value="{{ time_per_card }}"><br>
+        <h2>Total Exam Time (seconds):</h2>
+        <input type="number" name="total_exam_time" value="{{ total_exam_time }}"><br>
+        <h2>Exam Questions:</h2>
+        Min: <input type="number" name="min_questions" value="5"><br>
+        Max: <input type="number" name="max_questions" value="10"><br>
+        <input type="submit" value="Start Session">
+    </form>
+</body>
+</html>

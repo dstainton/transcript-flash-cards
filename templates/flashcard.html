@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flashcard</title>
+    <script>
+        let timeLeft = {{ time_limit }};
+        let timer = setInterval(function() {
+            timeLeft--;
+            document.getElementById('timer').innerText = 'Time Left: ' + timeLeft + ' seconds';
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                document.getElementById('answerForm').submit();
+            }
+        }, 1000);
+    </script>
+</head>
+<body>
+    <h1>Flashcard</h1>
+    <p id="timer">Time Left: {{ time_limit }} seconds</p>
+    <p><strong>Topic:</strong> {{ card.topic }}</p>
+    <p><strong>Question:</strong> {{ card.question }}</p>
+    <form method="post" id="answerForm">
+        <input type="text" name="answer" required><br>
+        <input type="submit" value="Submit Answer">
+    </form>
+    {% if mode == 'study' %}
+        <p>Answered Correctly {{ card.correct_count }} times in a row.</p>
+    {% endif %}
+</body>
+</html>

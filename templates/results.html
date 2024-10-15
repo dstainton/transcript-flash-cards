@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Results</title>
+</head>
+<body>
+    <h1>Session Results</h1>
+    <p>Total Questions: {{ total_questions }}</p>
+    <p>Correct Answers: {{ score }}</p>
+    <p>Score Percentage: {{ percentage }}%</p>
+    <a href="{{ url_for('index') }}">Return to Home</a>
+</body>
+</html>
