@@ -17,8 +17,8 @@ This flash card application helps users learn and test their knowledge based on 
 1. **Clone the Repository:**
 
    ```bash
-   git clone https://github.com/yourusername/flashcard_app.git
-   cd flashcard_app
+   git clone https://github.com/dstainton/transcript-flash-cards.git
+   cd transcript-flash-cards
    ```
 
 2. **Install Dependencies:**
