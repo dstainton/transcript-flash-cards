@@ -1,26 +1,101 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Start Session</title>
-</head>
-<body>
-    <h1>Configure Your Session</h1>
-    <form method="post">
-        <h2>Select Topics:</h2>
-        {% for topic in topics %}
-            <input type="checkbox" name="topics" value="{{ topic }}">{{ topic }}<br>
-        {% endfor %}
-        <h2>Select Mode:</h2>
-        <input type="radio" name="mode" value="study" checked> Study<br>
-        <input type="radio" name="mode" value="exam"> Exam<br>
-        <h2>Time Per Card (seconds):</h2>
-        <input type="number" name="time_per_card" value="{{ time_per_card }}"><br>
-        <h2>Total Exam Time (seconds):</h2>
-        <input type="number" name="total_exam_time" value="{{ total_exam_time }}"><br>
-        <h2>Exam Questions:</h2>
-        Min: <input type="number" name="min_questions" value="5"><br>
-        Max: <input type="number" name="max_questions" value="10"><br>
-        <input type="submit" value="Start Session">
+{% extends "base.html" %}
+
+{% block title %}Start Session{% endblock %}
+
+{% block content %}
+<div class="card setup-card">
+    <h1>Setup Your Session</h1>
+    
+    <form method="POST" class="setup-form">
+        <div class="form-section">
+            <h2>Select Topics</h2>
+            <div class="topic-grid">
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="all" name="topics" value="all" checked>
+                    <label for="all">All Topics</label>
+                </div>
+                {% for topic in topics %}
+                <div class="checkbox-wrapper">
+                    <input type="checkbox" id="{{ topic }}" name="topics" value="{{ topic }}" class="topic-checkbox">
+                    <label for="{{ topic }}">{{ topic }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Study Mode</h2>
+            <div class="radio-group">
+                <div class="radio-wrapper">
+                    <input type="radio" id="study" name="mode" value="study" checked>
+                    <label for="study">Study Mode</label>
+                </div>
+                <div class="radio-wrapper">
+                    <input type="radio" id="exam" name="mode" value="exam">
+                    <label for="exam">Exam Mode</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section" id="examOptions" style="display: none;">
+            <h2>Exam Options</h2>
+            <div class="input-group">
+                <div class="input-wrapper">
+                    <label for="min_questions">Minimum Questions:</label>
+                    <input type="number" id="min_questions" name="min_questions" value="5" min="1">
+                </div>
+                <div class="input-wrapper">
+                    <label for="max_questions">Maximum Questions:</label>
+                    <input type="number" id="max_questions" name="max_questions" value="10" min="1">
+                </div>
+                <div class="input-wrapper">
+                    <label for="time_per_card">Time per card (seconds):</label>
+                    <input type="number" id="time_per_card" name="time_per_card" 
+                           value="{{ time_per_card }}" min="5">
+                </div>
+                <div class="input-wrapper">
+                    <label for="total_exam_time">Time Limit (seconds):</label>
+                    <input type="number" id="total_exam_time" name="total_exam_time" 
+                           value="{{ total_exam_time }}" min="60">
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="button">Start Session</button>
     </form>
-</body>
-</html>
+
+    {% if error %}
+    <div class="error-message">
+        {{ error }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('all').addEventListener('change', function() {
+    const topicCheckboxes = document.querySelectorAll('.topic-checkbox');
+    topicCheckboxes.forEach(checkbox => {
+        checkbox.checked = false;
+        checkbox.disabled = this.checked;
+    });
+});
+
+document.querySelectorAll('.topic-checkbox').forEach(checkbox => {
+    checkbox.addEventListener('change', function() {
+        const allCheckbox = document.getElementById('all');
+        if (this.checked) {
+            allCheckbox.checked = false;
+        }
+    });
+});
+
+document.querySelectorAll('input[name="mode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const examOptions = document.getElementById('examOptions');
+        examOptions.style.display = this.value === 'exam' ? 'block' : 'none';
+    });
+});
+</script>
+{% endblock %}

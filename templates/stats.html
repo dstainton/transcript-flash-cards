@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics{% endblock %}
+
+{% block content %}
+<div class="stats-container">
+    <div class="card stats-card">
+        <h1>Study Statistics</h1>
+        
+        <div class="stats-section">
+            <h2>Exam History</h2>
+            {% if exam_history %}
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Topics</th>
+                        <th>Score</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for date, data in exam_history.items()|sort(reverse=true) %}
+                    <tr>
+                        <td>{{ date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ ', '.join(data.topics) }}</td>
+                        <td>{{ data.score }}/{{ data.total }}</td>
+                        <td>{{ "%.1f"|format(data.percentage) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-data">No exam history available</p>
+            {% endif %}
+        </div>
+
+        <div class="stats-section">
+            <h2>Study History</h2>
+            {% if study_history %}
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Topics</th>
+                        <th>Cards Completed</th>
+                        <th>Success Rate</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for date, data in study_history.items()|sort(reverse=true) %}
+                    <tr>
+                        <td>{{ date.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ ', '.join(data.topics) }}</td>
+                        <td>{{ data.total }}</td>
+                        <td>{{ "%.1f"|format(data.percentage) }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-data">No study history available</p>
+            {% endif %}
+        </div>
+
+        <div class="button-group">
+            <a href="{{ url_for('start') }}" class="button">New Session</a>
+            <a href="{{ url_for('index') }}" class="button button-secondary">Home</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

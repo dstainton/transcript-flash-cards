@@ -1,30 +1,53 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Flashcard</title>
-    <script>
-        let timeLeft = {{ time_limit }};
-        let timer = setInterval(function() {
-            timeLeft--;
-            document.getElementById('timer').innerText = 'Time Left: ' + timeLeft + ' seconds';
-            if (timeLeft <= 0) {
-                clearInterval(timer);
-                document.getElementById('answerForm').submit();
-            }
-        }, 1000);
-    </script>
-</head>
-<body>
-    <h1>Flashcard</h1>
-    <p id="timer">Time Left: {{ time_limit }} seconds</p>
-    <p><strong>Topic:</strong> {{ card.topic }}</p>
-    <p><strong>Question:</strong> {{ card.question }}</p>
-    <form method="post" id="answerForm">
-        <input type="text" name="answer" required><br>
-        <input type="submit" value="Submit Answer">
+{% extends "base.html" %}
+
+{% block title %}Study Session{% endblock %}
+
+{% block content %}
+<div class="flashcard card">
+    <div class="progress-info">
+        <p>Card {{ session.current_card_index + 1 }} of {{ session.flashcards|length }}</p>
+        <p>Score: {{ session.score }}</p>
+        {% if mode == 'exam' %}
+            <p>Time Remaining: <span id="timer"></span></p>
+        {% endif %}
+    </div>
+
+    <div class="question">{{ card.question }}</div>
+
+    <form method="POST" class="answer-form">
+        <input type="text" name="answer" class="input-field" placeholder="Your answer..." required autofocus>
+        <button type="submit" class="button">Submit Answer</button>
     </form>
-    {% if mode == 'study' %}
-        <p>Answered Correctly {{ card.correct_count }} times in a row.</p>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
     {% endif %}
-</body>
-</html>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{% if mode == 'exam' %}
+<script>
+    // Add timer JavaScript here
+    function updateTimer() {
+        const startTime = new Date("{{ session.start_time }}");
+        const timeLimit = {{ session.total_exam_time }};
+        const now = new Date();
+        const timeElapsed = Math.floor((now - startTime) / 1000);
+        const timeRemaining = timeLimit - timeElapsed;
+        
+        if (timeRemaining <= 0) {
+            window.location.href = "{{ url_for('results') }}";
+        }
+        
+        const minutes = Math.floor(timeRemaining / 60);
+        const seconds = timeRemaining % 60;
+        document.getElementById('timer').textContent = 
+            `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    setInterval(updateTimer, 1000);
+    updateTimer();
+</script>
+{% endif %}
+{% endblock %}

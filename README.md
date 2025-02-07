@@ -4,135 +4,152 @@ This flash card application helps users learn and test their knowledge based on 
 
 ## Features
 
-- **Transcript Processing:** Reads video transcripts from the `transcripts/` folder and generates flashcards.
-- **Configurable Settings:** Customize the number of cards, time limits, and topics.
-- **Study Mode:** Presents flashcards in random order and focuses on cards not answered correctly.
-- **Exam Mode:** Simulates an exam environment with a total time limit and delayed scoring.
-- **Scoring:** Tracks scores by topic, session, and maintains all-time scores.
-- **Answer Checking:** Uses the OpenAI API to assess if answers are correct.
-- **Graphical Interface:** Web-based interface with user-friendly controls.
+- **Transcript Processing:** 
+  - Reads video transcripts from the `transcripts/` folder and generates flashcards
+  - Optional `Topic.txt` file to provide context for flashcard generation
+  - Saves generated flashcards to avoid regeneration
+- **Answer Types:**
+  - True/False responses
+  - Yes/No responses
+  - Short phrases (5 words or less)
+- **Configurable Settings:** 
+  - Customize the number of cards
+  - Adjust time limits
+  - Select specific topics
+- **Study Mode:** 
+  - Presents flashcards in random order
+  - Focuses on cards not answered correctly
+  - Immediate feedback after each answer
+  - Retires cards after three correct answers
+- **Exam Mode:** 
+  - Simulates an exam environment
+  - Configurable time limit
+  - Delayed scoring
+  - Detailed results review
+- **Statistics:** 
+  - Tracks scores by topic and session
+  - Maintains exam history
+  - Maintains study session history
+  - Shows success rates and progress
+- **Modern Interface:**
+  - Responsive design
+  - Progress indicators
+  - Timer display
+  - Clean, card-based layout
 
 ## Installation
 
 1. **Clone the Repository:**
-
    ```bash
    git clone https://github.com/dstainton/transcript-flash-cards.git
    cd transcript-flash-cards
    ```
 
 2. **Install Dependencies:**
-
    ```bash
    pip install -r requirements.txt
    ```
 
 3. **Set Up OpenAI API Key:**
-
-   - Obtain an API key from [OpenAI](https://openai.com/).
-   - Set the `OPENAI_API_KEY` environment variable:
-
-     ```bash
-     export OPENAI_API_KEY='your-api-key'
-     ```
+   - Create a file named `openaikey.txt` in the root directory
+   - Add your OpenAI API key to this file
 
 4. **Add Transcripts:**
-
-   - Place your `.txt` transcript files in the `transcripts/` folder.
+   - Create a `transcripts/` folder
+   - Add your `.txt` transcript files
+   - Optionally add a `Topic.txt` file with the main topic
 
 ## Configuration
 
-- **Number of Cards per Transcript:**
-  - Modify the `CARDS_PER_TRANSCRIPT` variable in `app.py` or set it via the interface.
-- **Time Limits:**
-  - **Per Card:** Adjust `TIME_PER_CARD` in seconds.
-  - **Total Exam Time:** Adjust `TOTAL_EXAM_TIME` in seconds.
-- **Topics Selection:**
-  - Choose one or multiple topics on the start page to focus your study or exam session.
+- **Study Settings:**
+  - Number of cards per transcript (`CARDS_PER_TRANSCRIPT`)
+  - Time per card in seconds (`TIME_PER_CARD`)
+  - Total exam time in seconds (`TOTAL_EXAM_TIME`)
 
 ## Running the Application
-
-Start the Flask application:
 
 ```bash
 python app.py
 ```
 
-Open your web browser and navigate to `http://localhost:5000/` to access the app.
+Access the application at `http://localhost:5000/`
 
 ## Using the Application
 
-1. **Home Page:**
-   - Click on **Start** to begin configuring your session.
+1. **Start Page:**
+   - Select topics to study
+   - Choose study or exam mode
+   - Configure time settings
+   - Set exam question limits (exam mode only)
 
-2. **Session Configuration:**
-   - **Select Topics:** Choose the topics you want to study or be tested on.
-   - **Select Mode:**
-     - **Study Mode:** Immediate feedback after each question.
-     - **Exam Mode:** Feedback provided after completing all questions.
-   - **Set Time Limits:** Adjust the time per card or total exam time as needed.
-   - **Set Exam Questions (Exam Mode):** Specify the minimum and maximum number of questions per topic.
+2. **Study Mode:**
+   - View question and timer
+   - Submit answer
+   - Get immediate feedback
+   - Cards retire after three correct answers
 
-3. **Flashcard Session:**
-   - Read the question and provide your answer in the input field.
-   - A timer displays the remaining time for the current card.
-   - Click **Submit Answer** to proceed to the next card.
+3. **Exam Mode:**
+   - Answer questions within time limit
+   - No immediate feedback
+   - Review all answers at the end
+   - See detailed results and statistics
 
-4. **Results Page:**
-   - View your total score, the number of correct answers, and your percentage score.
-   - Option to return to the home page or start a new session.
+4. **Statistics:**
+   - View exam history
+   - Track study progress
+   - Monitor success rates
+   - Review topic performance
 
-## Persisting Scores
+## File Structure
 
-- **All-Time Scores:**
-  - Currently, the application tracks scores during the session.
-  - To persist all-time scores, implement a database or file system storage to save and load scores across sessions.
+```
+transcript-flash-cards/
+├── app.py              # Main application file
+├── openaikey.txt       # OpenAI API key
+├── requirements.txt    # Dependencies
+├── static/
+│   └── style.css      # Application styling
+├── templates/         
+│   ├── base.html      # Base template
+│   ├── index.html     # Home page
+│   ├── start.html     # Session configuration
+│   ├── flashcard.html # Card display
+│   ├── results.html   # Session results
+│   └── stats.html     # Statistics display
+└── transcripts/
+    ├── Topic.txt      # Optional main topic
+    └── *.txt          # Transcript files
+```
 
-## Customization
+## Data Persistence
 
-- **Graphical Interface:**
-  - Customize the HTML templates in the `templates/` folder to change the look and feel.
-- **Additional Features:**
-  - Implement features like user authentication, progress tracking, or advanced analytics as needed.
+- **Flashcards:** Saved to `flashcards.json`
+- **History:** Saved to `history.json`
+- **Session:** Managed via Flask sessions
+- **Secret Key:** Stored in `secret_key.txt`
 
 ## Error Handling
 
-- Ensure all dependencies are installed, and the OpenAI API key is correctly set.
-- Check console logs for error messages during transcript loading or API calls.
+- Validates all input data
+- Handles API failures gracefully
+- Provides user feedback for errors
+- Maintains session stability
 
-## Security Considerations
+## Security
 
-- Replace `app.secret_key` with a secure, random value in production.
-- Protect your OpenAI API key and do not expose it in client-side code or public repositories.
+- Secure session management
+- Protected API key storage
+- Input validation and sanitization
+- Error logging and monitoring
 
-## ChatGPT o1-preview Prompt
+## Browser Compatibility
 
-The first commit for this application was generated with the following prompt:
+- Tested on modern browsers
+- Responsive design for all screen sizes
+- Graceful degradation for older browsers
 
-```bash
-I want to create a flashcard app that:
-- Reads video transcripts from a folder.
-- Creates flash card data in JSON format from the transcript text.
-    - Configurable number of cards per transcript file defaults to the 10 most important pieces of information.
-    - Uses the OpenAI API to submit each transcript with a prompt to generate the JSON data.
-    - Captures topic, question, and answer for each flash card along with the transcript filename.
-    - Questions can require a yes/no response or a written sentence.
-- Presents the cards in random order.
-- Concentrates more on cards that haven't been correctly answered.
-- Retires cards that have been answered correctly three times in a row.
-- Keeps score by topic. All-time and current session. Persists all-time score.
-- Presents the answer after the user clicks the Submit Answer button, or after time expires.
-- Limits time per card to a default 10 seconds, but can be configured.
-- Configurable to work on just one, several, or all topics.
-- Shows cards in a graphical format.
-- Uses the OpenAI API to assess if answers are correct.
-- Has an Exam mode that:
-    - Chooses a configurable number of questions from each topic (min - max).
-    - Has a configurable total time limit rather than a limit per question. Default to 10 minutes.
-    - Assesses responses AFTER all have been attempted rather than one at a time.
-    - Does not present answers after each card, just moves to the next.
-    - Presents a total score at the end of the exam, both in fraction and percentage formats.
-- Has visual controls for all of the things a user would expect.
+## Known Limitations
 
-Please generate the entire application code, with error and exception checking, brief comments, and a user guide in markdown format.
-```
+- Session timeout after 30 minutes
+- Requires active internet connection for API calls
+- Limited to text-based answers

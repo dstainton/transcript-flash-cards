@@ -1,13 +1,41 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Results</title>
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}Session Results{% endblock %}
+
+{% block content %}
+<div class="card results-card">
     <h1>Session Results</h1>
-    <p>Total Questions: {{ total_questions }}</p>
-    <p>Correct Answers: {{ score }}</p>
-    <p>Score Percentage: {{ percentage }}%</p>
-    <a href="{{ url_for('index') }}">Return to Home</a>
-</body>
-</html>
+    
+    <div class="results-summary">
+        <div class="stat-box">
+            <h3>Score</h3>
+            <p class="large-text">{{ score }}/{{ total_questions }}</p>
+        </div>
+        <div class="stat-box">
+            <h3>Percentage</h3>
+            <p class="large-text">{{ "%.1f"|format(percentage) }}%</p>
+        </div>
+    </div>
+
+    {% if mode == 'exam' and results %}
+    <div class="results-detail">
+        <h2>Detailed Results</h2>
+        <div class="results-list">
+            {% for result in results %}
+            <div class="result-item {{ 'correct' if result.is_correct else 'incorrect' }}">
+                <p class="question">{{ result.question }}</p>
+                <p class="answer">Your answer: {{ result.user_answer }}</p>
+                <p class="correct-answer">Correct answer: {{ result.correct_answer }}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="button-group">
+        <a href="{{ url_for('start') }}" class="button">New Session</a>
+        <a href="{{ url_for('stats') }}" class="button button-secondary">View Statistics</a>
+        <a href="{{ url_for('index') }}" class="button button-tertiary">Home</a>
+    </div>
+</div>
+{% endblock %}
