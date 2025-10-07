@@ -25,7 +25,7 @@
                         <td>{{ date.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td>{{ ', '.join(data.topics) }}</td>
                         <td>{{ data.score }}/{{ data.total }}</td>
-                        <td>{{ "%.1f"|format(data.percentage) }}%</td>
+                        <td>{{ "%.1f"|format(data.percentage) if data.percentage is defined else "N/A" }}%</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -53,7 +53,7 @@
                         <td>{{ date.strftime('%Y-%m-%d %H:%M') }}</td>
                         <td>{{ ', '.join(data.topics) }}</td>
                         <td>{{ data.total }}</td>
-                        <td>{{ "%.1f"|format(data.percentage) }}%</td>
+                        <td>{{ "%.1f"|format(data.percentage) if data.percentage is defined else "N/A" }}%</td>
                     </tr>
                     {% endfor %}
                 </tbody>

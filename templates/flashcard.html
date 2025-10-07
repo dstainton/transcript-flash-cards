@@ -13,14 +13,49 @@
     </div>
 
     <div class="question">{{ card.question }}</div>
+    
+    <div class="answer-type-indicator">
+        {% if card.answer_type == 'true_false' %}
+            <span class="answer-type-badge true-false">Answer: True or False</span>
+        {% elif card.answer_type == 'yes_no' %}
+            <span class="answer-type-badge yes-no">Answer: Yes or No</span>
+        {% else %}
+            <span class="answer-type-badge short-phrase">Answer: Short phrase (5 words or less)</span>
+        {% endif %}
+    </div>
 
     <form method="POST" class="answer-form">
-        <input type="text" name="answer" class="input-field" placeholder="Your answer..." required autofocus>
-        <button type="submit" class="button">Submit Answer</button>
+        {% if card.answer_type == 'true_false' %}
+            <div class="answer-buttons">
+                <button type="submit" name="answer" value="True" class="answer-button true-button">True</button>
+                <button type="submit" name="answer" value="False" class="answer-button false-button">False</button>
+            </div>
+        {% elif card.answer_type == 'yes_no' %}
+            <div class="answer-buttons">
+                <button type="submit" name="answer" value="Yes" class="answer-button yes-button">Yes</button>
+                <button type="submit" name="answer" value="No" class="answer-button no-button">No</button>
+            </div>
+        {% else %}
+            <input type="text" name="answer" class="input-field" placeholder="Your answer..." required autofocus>
+            <button type="submit" class="button">Submit Answer</button>
+        {% endif %}
     </form>
 
     {% if error %}
         <p class="error">{{ error }}</p>
+    {% endif %}
+    
+    {% if feedback %}
+        <div class="feedback-container">
+            <div class="feedback {{ 'correct' if feedback.correct else 'incorrect' }}">
+                <p>{{ feedback.feedback }}</p>
+                {% if not feedback.correct %}
+                    <p class="correct-answer-display">
+                        <strong>Correct Answer:</strong> {{ feedback.correct_answer }}
+                    </p>
+                {% endif %}
+            </div>
+        </div>
     {% endif %}
 </div>
 {% endblock %}

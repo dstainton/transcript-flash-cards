@@ -80,10 +80,25 @@ def load_saved_flashcards(filepath='flashcards.json'):
     try:
         if os.path.exists(filepath):
             with open(filepath, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                flashcards = json.load(f)
+                # Add answer_type to existing flashcards if missing
+                for card in flashcards:
+                    if 'answer_type' not in card:
+                        card['answer_type'] = get_answer_type(card['answer'])
+                return flashcards
     except Exception as e:
         print(f"Error loading saved flashcards: {e}")
     return None
+
+def get_answer_type(correct_answer):
+    """Determine the type of answer expected"""
+    answer_lower = correct_answer.strip().lower()
+    if answer_lower in ['true', 'false']:
+        return 'true_false'
+    elif answer_lower in ['yes', 'no']:
+        return 'yes_no'
+    else:
+        return 'short_phrase'
 
 def validate_flashcard(card):
     required_keys = ['question', 'answer', 'topic', 'filename']
@@ -210,6 +225,7 @@ def generate_flashcards(transcript, filename, main_topic=None):
                 card['filename'] = filename
                 card['correct_count'] = 0
                 card['attempts'] = 0
+                card['answer_type'] = get_answer_type(card['answer'])  # Add answer type
             return flashcards
             
         except json.JSONDecodeError as e:
@@ -229,8 +245,8 @@ random.shuffle(flashcards)
 
 # Initialize scores
 all_time_scores = {}
-exam_history = defaultdict(list)
-study_history = defaultdict(list)
+exam_history = {}
+study_history = {}
 
 # Add persistent storage for history
 def save_history():
@@ -255,20 +271,21 @@ def load_history():
             with open('history.json', 'r') as f:
                 history = json.load(f)
                 # Convert string dates back to datetime objects
-                exam_history = defaultdict(list, {
+                exam_history = {
                     datetime.fromisoformat(k): v 
                     for k, v in history['exam_history'].items()
-                })
-                study_history = defaultdict(list, {
+                }
+                study_history = {
                     datetime.fromisoformat(k): v 
                     for k, v in history['study_history'].items()
-                })
+                }
                 all_time_scores = history['all_time_scores']
     except Exception as e:
         print(f"Error loading history: {e}")
 
 # Add cleanup of old history entries
 def cleanup_old_history(days=30):
+    global exam_history, study_history
     cutoff = datetime.now() - timedelta(days=days)
     exam_history = {k: v for k, v in exam_history.items() 
                    if isinstance(k, datetime) and k > cutoff}
@@ -378,12 +395,22 @@ def flashcard():
             session['current_card_index'] += 1
         else:
             correct = check_answer(card['question'], user_answer, card['answer'])
+            feedback = get_feedback(card['question'], user_answer, card['answer'], correct)
+            
             if correct:
                 session['score'] += 1
                 card['correct_count'] = session.get(f'correct_count_{current_card_index}', 0) + 1
                 session[f'correct_count_{current_card_index}'] = card['correct_count']
             else:
                 session[f'correct_count_{current_card_index}'] = 0
+            
+            # Store feedback in session for display
+            session['last_feedback'] = {
+                'correct': correct,
+                'feedback': feedback,
+                'user_answer': user_answer,
+                'correct_answer': card['answer']
+            }
             
             if card['correct_count'] >= 3:
                 session['flashcards'].pop(current_card_index)
@@ -396,10 +423,16 @@ def flashcard():
                 
         return redirect(url_for('flashcard'))
 
+    # Get feedback for display and then clear it
+    feedback_data = session.get('last_feedback')
+    if feedback_data:
+        session.pop('last_feedback', None)  # Clear feedback after displaying
+    
     return render_template('flashcard.html', 
                          card=card, 
                          mode=mode, 
-                         time_limit=session.get('time_per_card'))
+                         time_limit=session.get('time_per_card'),
+                         feedback=feedback_data)
 
 # Modify the results route
 @app.route('/results')
@@ -480,16 +513,20 @@ def exit():  # Changed from exit_session to exit
         total = session.get('current_card_index', 0)
         timestamp = datetime.now()
         
+        percentage = calculate_percentage(score, total)
+        
         if mode == 'exam':
             exam_history[timestamp] = {
                 'score': score,
                 'total': total,
+                'percentage': percentage,
                 'topics': session.get('topics', [])
             }
         else:
             study_history[timestamp] = {
                 'score': score,
                 'total': total,
+                'percentage': percentage,
                 'topics': session.get('topics', [])
             }
             
@@ -498,29 +535,74 @@ def exit():  # Changed from exit_session to exit
     session.clear()
     return redirect(url_for('index'))
 
+def get_feedback(question, user_answer, correct_answer, is_correct):
+    """Generate helpful feedback for the user"""
+    if is_correct:
+        return f"✅ Correct! Your answer '{user_answer}' is right."
+    else:
+        return f"❌ Incorrect. Your answer was '{user_answer}', but the correct answer is '{correct_answer}'. Try to understand why this is the correct answer."
+
 def check_answer(question, user_answer, correct_answer):
+    """Enhanced answer checking with better evaluation logic"""
     if not all(isinstance(x, str) for x in [question, user_answer, correct_answer]):
         print("Warning: Non-string input in check_answer")
         return False
+    
+    # Normalize answers for comparison
+    user_clean = user_answer.strip().lower()
+    correct_clean = correct_answer.strip().lower()
+    
+    # Direct exact match (case-insensitive)
+    if user_clean == correct_clean:
+        return True
+    
+    # Handle True/False variations
+    if correct_clean in ['true', 'false']:
+        if user_clean in ['true', 't', 'yes', 'y', '1'] and correct_clean == 'true':
+            return True
+        if user_clean in ['false', 'f', 'no', 'n', '0'] and correct_clean == 'false':
+            return True
+    
+    # Handle Yes/No variations
+    if correct_clean in ['yes', 'no']:
+        if user_clean in ['yes', 'y', 'true', 't', '1'] and correct_clean == 'yes':
+            return True
+        if user_clean in ['no', 'n', 'false', 'f', '0'] and correct_clean == 'no':
+            return True
+    
+    # For short phrase answers, use AI evaluation with more context
     prompt = f"""
+    You are evaluating a student's answer to a flashcard question.
+    
     Question: {question}
-    User Answer: {user_answer}
     Correct Answer: {correct_answer}
-    Is the user's answer correct? Respond with "Yes" or "No".
+    Student's Answer: {user_answer}
+    
+    The correct answer is: {correct_answer}
+    
+    Evaluate if the student's answer demonstrates understanding of the concept, even if the wording is different.
+    Consider:
+    - Synonyms and alternative phrasings
+    - Key concepts and terminology
+    - Partial understanding
+    
+    Respond with "CORRECT" if the student's answer is essentially right, or "INCORRECT" if it's wrong.
+    Be generous with partial credit for short phrase answers.
     """
+    
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "system", "content": "You are an educational assistant evaluating student answers. Be fair and generous with partial credit."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=1,
+            max_tokens=10,
             n=1,
             temperature=0,
         )
-        evaluation = response.choices[0].message.content.strip().lower()
-        return evaluation == 'yes'
+        evaluation = response.choices[0].message.content.strip().upper()
+        return evaluation == 'CORRECT'
     except Exception as e:
         print(f"Error checking answer: {e}")
         return False
