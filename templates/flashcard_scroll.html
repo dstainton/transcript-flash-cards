@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}Flashcards{% endblock %}
+
+{% block content %}
+<div class="scroll-container">
+    <div class="cards-wrapper">
+        <!-- Current card (active) - always at the top -->
+        <div class="card current-card" id="current-card">
+            <div class="card-header">
+                {% if mode == 'exam' %}
+                    <h3>Question {{ session.get('current_card_index', 0) + 1 }}</h3>
+                    <div class="exam-info">
+                        <div class="progress-indicator">
+                            <span class="current">{{ session.get('current_card_index', 0) + 1 }}</span> / <span class="total">{{ session.get('exam_questions', [])|length }}</span>
+                        </div>
+                        <div class="timer-container">
+                            {% if exam_remaining_seconds is defined %}
+                            <div class="exam-timer" id="exam-timer">
+                                <span class="timer-label">Exam Time:</span>
+                                <span class="timer-display" id="exam-timer-display">{{ "%.0f"|format(exam_remaining_seconds // 60) }}:{{ "%02d"|format(exam_remaining_seconds % 60) }}</span>
+                            </div>
+                            {% endif %}
+                            {% if question_remaining_seconds is defined %}
+                            <div class="question-timer" id="question-timer">
+                                <span class="timer-label">Question Time:</span>
+                                <span class="timer-display" id="question-timer-display">{{ "%.0f"|format(question_remaining_seconds // 60) }}:{{ "%02d"|format(question_remaining_seconds % 60) }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    <h3>Question {{ cards|length + 1 }}</h3>
+                    <div class="progress-indicator">
+                        <span class="current">{{ cards|length + 1 }}</span> / <span class="total">{{ session.get('total_cards', '?') }}</span>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <div class="question">{{ current_card.question }}</div>
+            
+            <div class="answer-type-indicator">
+                {% if current_card.answer_type == 'true_false' %}
+                    <span class="answer-type-badge true-false">Answer: True or False</span>
+                {% elif current_card.answer_type == 'yes_no' %}
+                    <span class="answer-type-badge yes-no">Answer: Yes or No</span>
+                {% elif current_card.answer_type == 'multiple_choice' %}
+                    <span class="answer-type-badge multiple-choice">Answer: Multiple Choice (Select one)</span>
+                {% elif current_card.answer_type == 'multiple_answer' %}
+                    <span class="answer-type-badge multiple-answer">Answer: Multiple Answer (Select all that apply)</span>
+                {% else %}
+                    <span class="answer-type-badge multiple-choice">Answer: Multiple Choice (Select one)</span>
+                {% endif %}
+            </div>
+
+            <form method="POST" class="answer-form">
+                {% if current_card.answer_type == 'true_false' %}
+                    <div class="answer-buttons">
+                        <button type="submit" name="answer" value="True" class="answer-button true-button">True</button>
+                        <button type="submit" name="answer" value="False" class="answer-button false-button">False</button>
+                    </div>
+                {% elif current_card.answer_type == 'yes_no' %}
+                    <div class="answer-buttons">
+                        <button type="submit" name="answer" value="Yes" class="answer-button yes-button">Yes</button>
+                        <button type="submit" name="answer" value="No" class="answer-button no-button">No</button>
+                    </div>
+                {% elif current_card.answer_type == 'multiple_choice' %}
+                    <div class="multiple-choice-options">
+                        {% for option in current_card.options %}
+                        <div class="option-wrapper">
+                            <input type="radio" id="option_{{ loop.index }}" name="answer" value="{{ option.split(')')[0] }}" required>
+                            <label for="option_{{ loop.index }}">{{ option }}</label>
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="button">Submit Answer</button>
+                    </div>
+                {% elif current_card.answer_type == 'multiple_answer' %}
+                    <div class="multiple-answer-options">
+                        {% for option in current_card.options %}
+                        <div class="option-wrapper">
+                            <input type="checkbox" id="option_{{ loop.index }}" name="answer" value="{{ option.split(')')[0] }}">
+                            <label for="option_{{ loop.index }}">{{ option }}</label>
+                        </div>
+                        {% endfor %}
+                        <button type="submit" class="button">Submit Answer</button>
+                    </div>
+                {% else %}
+                    <div class="multiple-choice-options">
+                        <p class="error">This question type is not supported. Please contact support.</p>
+                    </div>
+                {% endif %}
+            </form>
+
+            {% if error %}
+                <p class="error">{{ error }}</p>
+            {% endif %}
+        </div>
+
+        <!-- Separator between current and completed questions -->
+        {% if cards|length > 0 %}
+        <div class="questions-separator">
+            <div class="separator-line"></div>
+            <div class="separator-text">Previous Questions</div>
+            <div class="separator-line"></div>
+        </div>
+        {% endif %}
+
+        <!-- Completed cards (scrollable below) -->
+        {% for card in cards %}
+        <div class="card completed-card">
+            <div class="card-header">
+                <h3>Question {{ loop.index }}</h3>
+                <div class="result-indicator {{ 'correct' if card.correct else 'incorrect' }}">
+                    {{ '✅' if card.correct else '❌' }}
+                </div>
+            </div>
+            
+            <div class="question">{{ card.question }}</div>
+            
+            <div class="answer-type-indicator">
+                {% if card.answer_type == 'true_false' %}
+                    <span class="answer-type-badge true-false">Answer: True or False</span>
+                {% elif card.answer_type == 'yes_no' %}
+                    <span class="answer-type-badge yes-no">Answer: Yes or No</span>
+                {% elif card.answer_type == 'multiple_choice' %}
+                    <span class="answer-type-badge multiple-choice">Answer: Multiple Choice (Select one)</span>
+                {% elif card.answer_type == 'multiple_answer' %}
+                    <span class="answer-type-badge multiple-answer">Answer: Multiple Answer (Select all that apply)</span>
+                {% else %}
+                    <span class="answer-type-badge multiple-choice">Answer: Multiple Choice (Select one)</span>
+                {% endif %}
+            </div>
+
+            <!-- Show options if they exist -->
+            {% if card.options %}
+            <div class="options-display">
+                {% for option in card.options %}
+                <div class="option-display {{ 'selected' if option.split(')')[0] in card.user_answer.split(',') else '' }}">
+                    {{ option }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Results display -->
+            <div class="results-display">
+                <div class="user-answer">
+                    <strong>Your Answer:</strong> {{ card.user_answer }}
+                </div>
+                <div class="correct-answer">
+                    <strong>Correct Answer:</strong> {{ card.correct_answer }}
+                </div>
+                <div class="feedback {{ 'correct' if card.correct else 'incorrect' }}">
+                    {{ card.feedback }}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Navigation controls -->
+<div class="navigation-controls">
+    <button onclick="scrollToTop()" class="nav-button">↑ Current</button>
+    <button onclick="scrollToBottom()" class="nav-button">↓ Review</button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function scrollToTop() {
+    document.querySelector('.scroll-container').scrollTo({
+        top: 0,
+        behavior: 'smooth'
+    });
+}
+
+
+function scrollToBottom() {
+    const container = document.querySelector('.scroll-container');
+    container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth'
+    });
+}
+
+// Auto-scroll to top (current question) when page loads
+window.addEventListener('load', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('new_card') === 'true') {
+        // Show notification and scroll to top for new questions
+        showNewCardNotification();
+        setTimeout(scrollToTop, 100);
+    } else {
+        // Always start at the top (current question)
+        setTimeout(scrollToTop, 100);
+    }
+    
+    // Start exam timers if in exam mode
+    {% if mode == 'exam' and exam_remaining_seconds is defined %}
+    startExamTimers();
+    {% endif %}
+});
+
+// Show a subtle notification when a new card is added
+function showNewCardNotification() {
+    const notification = document.createElement('div');
+    notification.className = 'new-card-notification';
+    notification.innerHTML = '✅ Answer submitted! New question at top.';
+    document.body.appendChild(notification);
+    
+    // Remove notification after 3 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+// Auto-submit the current answer when timer expires
+function autoSubmitCurrentAnswer() {
+    const form = document.querySelector('.answer-form');
+    if (!form) return;
+    
+    // Check if there's a selected answer
+    const selectedRadio = form.querySelector('input[type="radio"]:checked');
+    const selectedCheckboxes = form.querySelectorAll('input[type="checkbox"]:checked');
+    
+    if (selectedRadio) {
+        // For multiple choice, submit the selected radio button
+        form.submit();
+    } else if (selectedCheckboxes.length > 0) {
+        // For multiple answer, submit with selected checkboxes
+        form.submit();
+    } else {
+        // No answer selected, submit empty form
+        form.submit();
+    }
+}
+
+// Exam timer functionality
+function startExamTimers() {
+    const examTimerDisplay = document.getElementById('exam-timer-display');
+    const examTimer = document.getElementById('exam-timer');
+    const questionTimerDisplay = document.getElementById('question-timer-display');
+    const questionTimer = document.getElementById('question-timer');
+    
+    let examTimerInterval = null;
+    let questionTimerInterval = null;
+    
+    // Start exam timer
+    if (examTimerDisplay && examTimer) {
+        const examTimeText = examTimerDisplay.textContent;
+        const [examMinutes, examSeconds] = examTimeText.split(':').map(Number);
+        let examTotalSeconds = examMinutes * 60 + examSeconds;
+        
+        examTimerInterval = setInterval(() => {
+            examTotalSeconds--;
+            
+            if (examTotalSeconds <= 0) {
+                clearInterval(examTimerInterval);
+                clearInterval(questionTimerInterval);
+                examTimerDisplay.textContent = '00:00';
+                examTimer.classList.add('timer-expired');
+                
+                // Auto-submit the exam when time runs out
+                setTimeout(() => {
+                    window.location.href = '{{ url_for("results") }}';
+                }, 1000);
+                return;
+            }
+            
+            // Update exam timer display
+            const mins = Math.floor(examTotalSeconds / 60);
+            const secs = examTotalSeconds % 60;
+            examTimerDisplay.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            
+            // Add warning classes for exam timer
+            if (examTotalSeconds <= 60) {
+                examTimer.classList.add('timer-warning');
+            } else if (examTotalSeconds <= 300) { // 5 minutes
+                examTimer.classList.add('timer-low');
+            }
+        }, 1000);
+    }
+    
+    // Start question timer
+    if (questionTimerDisplay && questionTimer) {
+        const questionTimeText = questionTimerDisplay.textContent;
+        const [questionMinutes, questionSeconds] = questionTimeText.split(':').map(Number);
+        let questionTotalSeconds = questionMinutes * 60 + questionSeconds;
+        
+        questionTimerInterval = setInterval(() => {
+            questionTotalSeconds--;
+            
+            if (questionTotalSeconds <= 0) {
+                clearInterval(questionTimerInterval);
+                questionTimerDisplay.textContent = '00:00';
+                questionTimer.classList.add('timer-expired');
+                
+                // Auto-submit the current question when time runs out
+                setTimeout(() => {
+                    autoSubmitCurrentAnswer();
+                }, 1000);
+                return;
+            }
+            
+            // Update question timer display
+            const mins = Math.floor(questionTotalSeconds / 60);
+            const secs = questionTotalSeconds % 60;
+            questionTimerDisplay.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            
+            // Add warning classes for question timer
+            if (questionTotalSeconds <= 10) {
+                questionTimer.classList.add('timer-warning');
+            } else if (questionTotalSeconds <= 30) {
+                questionTimer.classList.add('timer-low');
+            }
+        }, 1000);
+    }
+}
+</script>
+{% endblock %}

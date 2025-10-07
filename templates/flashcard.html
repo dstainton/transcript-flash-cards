@@ -19,8 +19,12 @@
             <span class="answer-type-badge true-false">Answer: True or False</span>
         {% elif card.answer_type == 'yes_no' %}
             <span class="answer-type-badge yes-no">Answer: Yes or No</span>
+        {% elif card.answer_type == 'multiple_choice' %}
+            <span class="answer-type-badge multiple-choice">Answer: Multiple Choice (Select one)</span>
+        {% elif card.answer_type == 'multiple_answer' %}
+            <span class="answer-type-badge multiple-answer">Answer: Multiple Answer (Select all that apply)</span>
         {% else %}
-            <span class="answer-type-badge short-phrase">Answer: Short phrase (5 words or less)</span>
+            <span class="answer-type-badge multiple-choice">Answer: Multiple Choice (Select one)</span>
         {% endif %}
     </div>
 
@@ -35,9 +39,30 @@
                 <button type="submit" name="answer" value="Yes" class="answer-button yes-button">Yes</button>
                 <button type="submit" name="answer" value="No" class="answer-button no-button">No</button>
             </div>
+        {% elif card.answer_type == 'multiple_choice' %}
+            <div class="multiple-choice-options">
+                {% for option in card.options %}
+                <div class="option-wrapper">
+                    <input type="radio" id="option_{{ loop.index }}" name="answer" value="{{ option.split(')')[0] }}" required>
+                    <label for="option_{{ loop.index }}">{{ option }}</label>
+                </div>
+                {% endfor %}
+                <button type="submit" class="button">Submit Answer</button>
+            </div>
+        {% elif card.answer_type == 'multiple_answer' %}
+            <div class="multiple-answer-options">
+                {% for option in card.options %}
+                <div class="option-wrapper">
+                    <input type="checkbox" id="option_{{ loop.index }}" name="answer" value="{{ option.split(')')[0] }}">
+                    <label for="option_{{ loop.index }}">{{ option }}</label>
+                </div>
+                {% endfor %}
+                <button type="submit" class="button">Submit Answer</button>
+            </div>
         {% else %}
-            <input type="text" name="answer" class="input-field" placeholder="Your answer..." required autofocus>
-            <button type="submit" class="button">Submit Answer</button>
+            <div class="multiple-choice-options">
+                <p class="error">This question type is not supported. Please contact support.</p>
+            </div>
         {% endif %}
     </form>
 
@@ -53,6 +78,11 @@
                     <p class="correct-answer-display">
                         <strong>Correct Answer:</strong> {{ feedback.correct_answer }}
                     </p>
+                {% endif %}
+                {% if is_final_feedback %}
+                    <div class="final-feedback-actions">
+                        <a href="{{ url_for('results') }}" class="button">Continue to Results</a>
+                    </div>
                 {% endif %}
             </div>
         </div>

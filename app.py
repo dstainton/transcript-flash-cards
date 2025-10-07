@@ -24,15 +24,24 @@ required_packages = ['flask', 'openai']
 for package in required_packages:
     install_and_import(package)
 
+# Install flask-session separately (package name differs from import name)
+try:
+    import flask_session
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "flask-session"])
+
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask_session import Session
 import openai
 
 # Create Flask app and set secret key
 app = Flask(__name__)
 
-# Add to app configuration
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
-app.config['SESSION_REFRESH_EACH_REQUEST'] = True
+# Configure server-side session to avoid cookie size limits
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = './.flask_session/'
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
 
 # Generate a persistent secret key if it doesn't exist
 SECRET_KEY_FILE = 'secret_key.txt'
@@ -55,6 +64,9 @@ def get_or_create_secret_key():
 
 app.secret_key = get_or_create_secret_key()
 
+# Initialize server-side session
+Session(app)
+
 # Set up OpenAI API key
 with open('openaikey.txt', 'r') as file:
     api_key = file.read().strip()
@@ -65,7 +77,7 @@ client = openai.OpenAI(api_key=api_key)
 # Configurable parameters
 CARDS_PER_TRANSCRIPT = 15  # Default number of cards per transcript
 TIME_PER_CARD = 10  # Default time per card in seconds
-TOTAL_EXAM_TIME = 3600  # Default total exam time in seconds (10 minutes)
+TOTAL_EXAM_TIME = 60  # Default total exam time in minutes
 
 def save_flashcards(flashcards, filepath='flashcards.json'):
     """Save flashcards to a JSON file"""
@@ -97,8 +109,13 @@ def get_answer_type(correct_answer):
         return 'true_false'
     elif answer_lower in ['yes', 'no']:
         return 'yes_no'
+    elif len(correct_answer.split()) == 1 and correct_answer.isalpha() and len(correct_answer) == 1:
+        return 'multiple_choice'
+    elif ',' in correct_answer and all(len(part.strip()) == 1 and part.strip().isalpha() for part in correct_answer.split(',')):
+        return 'multiple_answer'
     else:
-        return 'short_phrase'
+        # Default to multiple_choice for any other single word answers
+        return 'multiple_choice'
 
 def validate_flashcard(card):
     required_keys = ['question', 'answer', 'topic', 'filename']
@@ -165,13 +182,14 @@ def generate_flashcards(transcript, filename, main_topic=None):
     prompt = f"""
     {topic_context}Generate exactly {CARDS_PER_TRANSCRIPT} flashcards from the following transcript.
     The response must be a valid JSON array containing flashcard objects.
-    Each flashcard object must have these exact keys: 'question' and 'answer'.
+    Each flashcard object must have these exact keys: 'question', 'answer', and optionally 'options'.
     Format the response as a JSON array without any additional text or explanation.
 
-    IMPORTANT: Answers must be one of:
-    - "True" or "False"
-    - "Yes" or "No"
-    - A phrase of 5 words or less
+    IMPORTANT: Create ONLY these question types:
+    - True/False questions (answer: "True" or "False")
+    - Yes/No questions (answer: "Yes" or "No") 
+    - Multiple Choice questions (answer: single letter like "A", "B", "C", "D" and include "options" array)
+    - Multiple Answer questions (answer: comma-separated letters like "A,C" and include "options" array)
 
     Example format:
     [
@@ -184,8 +202,14 @@ def generate_flashcards(transcript, filename, main_topic=None):
             "answer": "Yes"
         }},
         {{
-            "question": "What is a short answer?",
-            "answer": "Five words or less only"
+            "question": "What is the primary role of a Product Owner?",
+            "answer": "A",
+            "options": ["A) Maximize product value", "B) Write code", "C) Manage the team", "D) Create documentation"]
+        }},
+        {{
+            "question": "Which of the following are Scrum values? (Select all that apply)",
+            "answer": "A,C,D",
+            "options": ["A) Courage", "B) Speed", "C) Focus", "D) Respect"]
         }}
     ]
 
@@ -195,12 +219,12 @@ def generate_flashcards(transcript, filename, main_topic=None):
     try:
         print("  Sending request to OpenAI API...")
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4.1",
             messages=[
                 {
                     "role": "system", 
                     "content": "You are a helpful assistant that generates flashcards with very concise answers. "
-                              "Answers must be True/False, Yes/No, or a phrase of 5 words or less."
+                              "Answers must be True/False, Yes/No, single letter (A,B,C,D), or comma-separated letters (A,C,D)."
                               "Each type of answer must be represented in the set of flashcards."
                               "Ignore anecdotes, jokes, stories, and other irrelevent information."
                 },
@@ -296,9 +320,25 @@ def cleanup_old_history(days=30):
 load_history()
 
 # Routes
+
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/test')
+def test():
+    print("TEST ROUTE CALLED")
+    import sys
+    sys.stdout.flush()
+    # Also try logging
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    logging.info("TEST ROUTE CALLED VIA LOGGING")
+    # Also write to file
+    with open('debug.log', 'a') as f:
+        f.write("TEST ROUTE CALLED\n")
+    return "Test route working!"
+
 
 @app.route('/start', methods=['GET', 'POST'])
 def start():
@@ -306,11 +346,25 @@ def start():
         if not request.form.getlist('topics'):
             flash('Please select at least one topic', 'error')
             return redirect(url_for('start'))
-        selected_topics = request.form.getlist('topics')  # Get list of selected topics
+        selected_topics = request.form.getlist('topics')
+        
+        print(f"Form data: {dict(request.form)}")
+        print(f"Topics selected: {selected_topics}")
+        print(f"Raw topics list: {list(selected_topics)}")
+        
+        # Reset specific session keys to ensure clean start
+        keys_to_reset = ['mode', 'user_answers', 'exam_questions', 'completed_cards', 'current_card_index', 'score', 'start_time', 'topics', 'total_attempts', 'exam_start_time', 'exam_duration_seconds', 'question_start_time', 'question_duration_seconds', 'flashcards', 'total_cards', 'time_per_card', 'total_exam_time']
+        for key in keys_to_reset:
+            if key in session:
+                del session[key]
         
         # Initialize session
-        session.clear()  # Clear any existing session data
         session['mode'] = request.form.get('mode', 'study')
+        
+        # Initialize all session variables
+        session['user_answers'] = []
+        session['exam_questions'] = []
+        session['completed_cards'] = []
         
         # Get time values with proper error handling and defaults
         try:
@@ -323,15 +377,41 @@ def start():
         session['current_card_index'] = 0
         session['score'] = 0
         session['start_time'] = datetime.now().isoformat()
-        session['topics'] = selected_topics  # Missing topics in session
+        session['topics'] = selected_topics
+        session['completed_cards'] = []
+        session['total_attempts'] = 0
+        
+        # Debug: Print session state
+        print(f"New flashcard session started - mode: {session['mode']}, current_card_index: {session['current_card_index']}")
+        print(f"Session keys after setup: {list(session.keys())}")
+        
+        # Test session persistence by setting a test value
+        session['test_value'] = 'test_persistence'
+        print(f"Test value set: {session.get('test_value')}")
+        
+        # Initialize exam timer
+        if session['mode'] == 'exam':
+            session['exam_start_time'] = datetime.now().isoformat()
+            session['exam_duration_seconds'] = session['total_exam_time'] * 60  # Convert minutes to seconds
+            session['question_start_time'] = datetime.now().isoformat()
+            session['question_duration_seconds'] = session['time_per_card']  # Time per question in seconds
         
         # Filter flashcards by selected topics if any are selected
-        if selected_topics and 'all' not in selected_topics:
-            session['flashcards'] = [card for card in flashcards if card['topic'] in selected_topics]
-        else:
+        print(f"Selected topics: {selected_topics}")
+        print(f"Total flashcards available: {len(flashcards)}")
+        
+        if 'all' in selected_topics:
             session['flashcards'] = flashcards.copy()  # Use all flashcards
+            print(f"Using all flashcards: {len(session['flashcards'])}")
+        else:
+            session['flashcards'] = [card for card in flashcards if card['topic'] in selected_topics]
+            print(f"Filtered flashcards: {len(session['flashcards'])}")
+            
+        session['total_cards'] = len(session['flashcards'])
+        print(f"Total cards set to: {session['total_cards']}")
             
         if not session['flashcards']:  # If no flashcards match the selected topics
+            print("ERROR: No flashcards found - redirecting back to start")
             return render_template('start.html', 
                                 topics=sorted(set(card['topic'] for card in flashcards)),
                                 error="No flashcards found for selected topics")
@@ -361,56 +441,190 @@ def start():
 @app.route('/flashcard', methods=['GET', 'POST'])
 def flashcard():
     # Check if session is properly initialized
-    if 'flashcards' not in session or not session['flashcards']:
-        return redirect(url_for('start'))
-
-    mode = session['mode']
-    current_card_index = session['current_card_index']
+    mode = session.get('mode', 'study')
+    current_card_index = session.get('current_card_index', 0)
     
-    # Get the current card
+    print(f"Flashcard route - mode: {mode}, current_card_index: {current_card_index}")
+    print(f"Session keys in flashcard route: {list(session.keys())}")
+    print(f"Test value in flashcard route: {session.get('test_value', 'NOT_FOUND')}")
+    
     if mode == 'exam':
-        if current_card_index >= len(session.get('exam_questions', [])):
-            return redirect(url_for('results'))
-        card = session['exam_questions'][current_card_index]
+        exam_questions = session.get('exam_questions', [])
+        print(f"Exam questions: {len(exam_questions)}")
+        if 'exam_questions' not in session or not exam_questions:
+            print("No exam questions - redirecting to start")
+            return redirect(url_for('start'))
     else:
-        if current_card_index >= len(session['flashcards']): 
+        flashcards = session.get('flashcards', [])
+        print(f"Study flashcards: {len(flashcards)}")
+        if 'flashcards' not in session or not flashcards:
+            print("No flashcards - redirecting to start")
+            return redirect(url_for('start'))
+
+    # Get the current card first
+    if mode == 'exam':
+        exam_questions = session.get('exam_questions', [])
+        print(f"Checking exam: current_card_index={current_card_index}, exam_questions_length={len(exam_questions)}")
+        if current_card_index >= len(exam_questions):
+            print(f"Redirecting to results - current_card_index ({current_card_index}) >= exam_questions length ({len(exam_questions)})")
             return redirect(url_for('results'))
-        card = session['flashcards'][current_card_index]
+        card = exam_questions[current_card_index]
+    else:
+        flashcards = session.get('flashcards', [])
+        print(f"Checking study: current_card_index={current_card_index}, flashcards_length={len(flashcards)}")
+        if current_card_index >= len(flashcards):
+            print(f"Redirecting to results - current_card_index ({current_card_index}) >= flashcards length ({len(flashcards)})")
+            return redirect(url_for('results'))
+        card = flashcards[current_card_index]
+
+    # Check for timer expiry in exam mode
+    if mode == 'exam':
+        exam_start_time = datetime.fromisoformat(session.get('exam_start_time', datetime.now().isoformat()))
+        elapsed_seconds = (datetime.now() - exam_start_time).total_seconds()
+        if elapsed_seconds >= session.get('exam_duration_seconds', 0):
+            return redirect(url_for('results'))
+        
+        # Check for per-question timer expiry
+        question_start_time = datetime.fromisoformat(session.get('question_start_time', datetime.now().isoformat()))
+        question_elapsed = (datetime.now() - question_start_time).total_seconds()
+        if question_elapsed >= session.get('question_duration_seconds', 0):
+            # Check if there's a user answer from the form (timeout but answer provided)
+            user_answer = ''
+            if request.method == 'POST':
+                if card.get('answer_type') == 'multiple_answer':
+                    user_answer = ','.join(request.form.getlist('answer'))
+                else:
+                    user_answer = request.form.get('answer', '')
+            
+            if user_answer:
+                # Time expired but user provided an answer - evaluate it
+                is_correct = check_answer(card['question'], user_answer, card['answer'])
+                completed_card = {
+                    'question': card['question'],
+                    'user_answer': user_answer,
+                    'correct_answer': card['answer'],
+                    'correct': is_correct,
+                    'feedback': get_feedback(card['question'], user_answer, card['answer'], is_correct) + ' ⏰ (Time expired)',
+                    'answer_type': card.get('answer_type', 'multiple_choice'),
+                    'options': card.get('options', [])
+                }
+                
+                # Store in user_answers for results calculation
+                session.setdefault('user_answers', []).append({
+                    'question': card['question'],
+                    'user_answer': user_answer,
+                    'correct_answer': card['answer']
+                })
+            else:
+                # Time expired with no answer
+                completed_card = {
+                    'question': card['question'],
+                    'user_answer': '',  # Empty answer for timeout
+                    'correct_answer': card['answer'],
+                    'correct': False,
+                    'feedback': '⏰ Time expired! No answer submitted.',
+                    'answer_type': card.get('answer_type', 'multiple_choice'),
+                    'options': card.get('options', [])
+                }
+                
+                # Store in user_answers for results calculation
+                session.setdefault('user_answers', []).append({
+                    'question': card['question'],
+                    'user_answer': '',  # Empty answer for timeout
+                    'correct_answer': card['answer']
+                })
+            
+            # Add to completed cards for display
+            session.setdefault('completed_cards', []).append(completed_card)
+            session['current_card_index'] += 1
+            session['question_start_time'] = datetime.now().isoformat()  # Reset question timer
+            return redirect(url_for('flashcard'))
 
     # Handle POST request (answer submission)
     if request.method == 'POST':
-        user_answer = request.form.get('answer')
+        # Handle multiple answer submissions (checkboxes)
+        if card.get('answer_type') == 'multiple_answer':
+            user_answer = ','.join(request.form.getlist('answer'))
+        else:
+            user_answer = request.form.get('answer')
+            
         if not user_answer:
-            return render_template('flashcard.html', 
-                                card=card, 
+            # Get completed cards based on mode
+            if mode == 'exam':
+                completed_cards = session.get('completed_cards', [])
+                # Calculate remaining time for exam
+                exam_start_time = datetime.fromisoformat(session.get('exam_start_time', datetime.now().isoformat()))
+                elapsed_seconds = (datetime.now() - exam_start_time).total_seconds()
+                exam_remaining_seconds = max(0, session.get('exam_duration_seconds', 0) - elapsed_seconds)
+                
+                # Calculate remaining time for current question
+                question_start_time = datetime.fromisoformat(session.get('question_start_time', datetime.now().isoformat()))
+                question_elapsed = (datetime.now() - question_start_time).total_seconds()
+                question_remaining_seconds = max(0, session.get('question_duration_seconds', 0) - question_elapsed)
+            else:
+                completed_cards = session.get('completed_cards', [])
+                exam_remaining_seconds = None
+                question_remaining_seconds = None
+                
+            return render_template('flashcard_scroll.html', 
+                                cards=completed_cards,
+                                current_card=card, 
                                 mode=mode, 
+                                time_limit=session.get('time_per_card'),
+                                exam_remaining_seconds=exam_remaining_seconds,
+                                question_remaining_seconds=question_remaining_seconds,
                                 error="Please provide an answer")
         
         if mode == 'exam':
+            # Store the completed question with results for display
+            completed_card = {
+                'question': card['question'],
+                'user_answer': user_answer,
+                'correct_answer': card['answer'],
+                'correct': check_answer(card['question'], user_answer, card['answer']),
+                'feedback': get_feedback(card['question'], user_answer, card['answer'], check_answer(card['question'], user_answer, card['answer'])),
+                'answer_type': card.get('answer_type', 'multiple_choice'),
+                'options': card.get('options', [])
+            }
+            
+            # Add to completed cards for display
+            session.setdefault('completed_cards', []).append(completed_card)
+            
+            # Also store in user_answers for results calculation
             session.setdefault('user_answers', []).append({
                 'question': card['question'],
                 'user_answer': user_answer,
                 'correct_answer': card['answer']
             })
             session['current_card_index'] += 1
+            session['question_start_time'] = datetime.now().isoformat()  # Reset question timer for next question
         else:
             correct = check_answer(card['question'], user_answer, card['answer'])
             feedback = get_feedback(card['question'], user_answer, card['answer'], correct)
-            
+
             if correct:
                 session['score'] += 1
                 card['correct_count'] = session.get(f'correct_count_{current_card_index}', 0) + 1
                 session[f'correct_count_{current_card_index}'] = card['correct_count']
             else:
                 session[f'correct_count_{current_card_index}'] = 0
-            
-            # Store feedback in session for display
-            session['last_feedback'] = {
+
+            # Store the completed card with results
+            completed_card = {
+                'question': card['question'],
+                'user_answer': user_answer,
+                'correct_answer': card['answer'],
                 'correct': correct,
                 'feedback': feedback,
-                'user_answer': user_answer,
-                'correct_answer': card['answer']
+                'answer_type': card.get('answer_type', 'multiple_choice'),
+                'options': card.get('options', [])
             }
+            
+            # Add to completed cards list
+            session.setdefault('completed_cards', []).append(completed_card)
+            
+            # Check if this is the last card
+            is_last_card = (current_card_index + 1 >= len(session['flashcards']))
             
             if card['correct_count'] >= 3:
                 session['flashcards'].pop(current_card_index)
@@ -420,19 +634,38 @@ def flashcard():
             # Track attempts for each card
             card['attempts'] = card.get('attempts', 0) + 1
             session['total_attempts'] = session.get('total_attempts', 0) + 1
+            
+            # If this is the last card, show results
+            if is_last_card:
+                return redirect(url_for('results'))
                 
-        return redirect(url_for('flashcard'))
+        return redirect(url_for('flashcard', new_card='true'))
 
-    # Get feedback for display and then clear it
-    feedback_data = session.get('last_feedback')
-    if feedback_data:
-        session.pop('last_feedback', None)  # Clear feedback after displaying
+    # Get all completed cards and current card for scrolling interface
+    if mode == 'exam':
+        # Exam mode now shows completed cards below current question
+        completed_cards = session.get('completed_cards', [])
+        # Calculate remaining time for exam
+        exam_start_time = datetime.fromisoformat(session.get('exam_start_time', datetime.now().isoformat()))
+        elapsed_seconds = (datetime.now() - exam_start_time).total_seconds()
+        exam_remaining_seconds = max(0, session.get('exam_duration_seconds', 0) - elapsed_seconds)
+        
+        # Calculate remaining time for current question
+        question_start_time = datetime.fromisoformat(session.get('question_start_time', datetime.now().isoformat()))
+        question_elapsed = (datetime.now() - question_start_time).total_seconds()
+        question_remaining_seconds = max(0, session.get('question_duration_seconds', 0) - question_elapsed)
+    else:
+        completed_cards = session.get('completed_cards', [])
+        exam_remaining_seconds = None
+        question_remaining_seconds = None
     
-    return render_template('flashcard.html', 
-                         card=card, 
+    return render_template('flashcard_scroll.html', 
+                         cards=completed_cards,
+                         current_card=card, 
                          mode=mode, 
                          time_limit=session.get('time_per_card'),
-                         feedback=feedback_data)
+                         exam_remaining_seconds=exam_remaining_seconds,
+                         question_remaining_seconds=question_remaining_seconds)
 
 # Modify the results route
 @app.route('/results')
@@ -570,42 +803,19 @@ def check_answer(question, user_answer, correct_answer):
         if user_clean in ['no', 'n', 'false', 'f', '0'] and correct_clean == 'no':
             return True
     
-    # For short phrase answers, use AI evaluation with more context
-    prompt = f"""
-    You are evaluating a student's answer to a flashcard question.
+    # Handle Multiple Choice (single letter answers)
+    if len(correct_clean) == 1 and correct_clean.isalpha():
+        return user_clean == correct_clean
     
-    Question: {question}
-    Correct Answer: {correct_answer}
-    Student's Answer: {user_answer}
+    # Handle Multiple Answer (comma-separated letters)
+    if ',' in correct_clean:
+        correct_answers = [ans.strip().lower() for ans in correct_clean.split(',')]
+        user_answers = [ans.strip().lower() for ans in user_clean.split(',')]
+        return set(correct_answers) == set(user_answers)
     
-    The correct answer is: {correct_answer}
-    
-    Evaluate if the student's answer demonstrates understanding of the concept, even if the wording is different.
-    Consider:
-    - Synonyms and alternative phrasings
-    - Key concepts and terminology
-    - Partial understanding
-    
-    Respond with "CORRECT" if the student's answer is essentially right, or "INCORRECT" if it's wrong.
-    Be generous with partial credit for short phrase answers.
-    """
-    
-    try:
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are an educational assistant evaluating student answers. Be fair and generous with partial credit."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=10,
-            n=1,
-            temperature=0,
-        )
-        evaluation = response.choices[0].message.content.strip().upper()
-        return evaluation == 'CORRECT'
-    except Exception as e:
-        print(f"Error checking answer: {e}")
-        return False
+    # If we get here, it's likely a multiple choice question that wasn't properly classified
+    # Default to exact match for any remaining cases
+    return user_clean == correct_clean
 
 # Fix percentage calculation to handle zero division
 def calculate_percentage(score, total):
