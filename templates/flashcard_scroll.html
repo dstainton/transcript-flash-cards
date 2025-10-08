@@ -105,11 +105,11 @@
         </div>
         {% endif %}
 
-        <!-- Completed cards (scrollable below) -->
-        {% for card in cards %}
+        <!-- Completed cards (scrollable below) - reversed so most recent is first -->
+        {% for card in cards|reverse %}
         <div class="card completed-card">
             <div class="card-header">
-                <h3>Question {{ loop.index }}</h3>
+                <h3>Question {{ cards|length - loop.index + 1 }}</h3>
                 <div class="result-indicator {{ 'correct' if card.correct else 'incorrect' }}">
                     {{ '✅' if card.correct else '❌' }}
                 </div>
