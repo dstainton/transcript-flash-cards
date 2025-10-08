@@ -64,6 +64,7 @@ db.sqlite3-journal
 # Flask stuff:
 instance/
 .webassets-cache
+.flask_session/
 
 # Scrapy stuff:
 .scrapy
@@ -126,11 +127,14 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# Text files
-*.txt
+# Application-specific files - SECURITY CRITICAL
 openaikey.txt
 secret_key.txt
 
-# JSON files
+# Generated data files
 flashcards.json
 history.json
+debug.log
+
+# Transcript files (raw content)
+transcripts/*.txt

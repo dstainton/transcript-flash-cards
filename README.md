@@ -9,9 +9,10 @@ This flash card application helps users learn and test their knowledge based on 
   - Optional `Topic.txt` file to provide context for flashcard generation
   - Saves generated flashcards to avoid regeneration
 - **Answer Types:**
-  - True/False responses
-  - Yes/No responses
-  - Short phrases (5 words or less)
+  - True/False statements
+  - Yes/No questions
+  - Multiple Choice (single answer)
+  - Multiple Answer (select all that apply)
 - **Configurable Settings:** 
   - Customize the number of cards
   - Adjust time limits
@@ -37,7 +38,31 @@ This flash card application helps users learn and test their knowledge based on 
   - Timer display
   - Clean, card-based layout
 
-## Installation
+## Quick Start (Windows)
+
+### Easy Method - Double-Click to Start
+
+1. **Prerequisites:**
+   - Install Python 3.7 or higher from [python.org](https://www.python.org/)
+   - Ensure "Add Python to PATH" is checked during installation
+
+2. **Setup:**
+   - Create a file named `openaikey.txt` in the root directory
+   - Add your OpenAI API key to this file
+
+3. **Run:**
+   - Double-click `start_flashcards.bat`
+   - The script will:
+     - Create an isolated virtual environment (`.venv`) 
+     - Install all required dependencies
+     - Start the Flask server
+     - Automatically open your browser to http://localhost:5000
+
+4. **Stop:**
+   - Press `Ctrl+C` in the command window, or
+   - Double-click `stop_flashcards.bat`
+
+### Manual Installation (All Platforms)
 
 1. **Clone the Repository:**
    ```bash
@@ -45,16 +70,27 @@ This flash card application helps users learn and test their knowledge based on 
    cd transcript-flash-cards
    ```
 
-2. **Install Dependencies:**
+2. **Create Virtual Environment (Recommended):**
+   ```bash
+   python -m venv .venv
+   
+   # Windows:
+   .venv\Scripts\activate
+   
+   # Mac/Linux:
+   source .venv/bin/activate
+   ```
+
+3. **Install Dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Set Up OpenAI API Key:**
+4. **Set Up OpenAI API Key:**
    - Create a file named `openaikey.txt` in the root directory
    - Add your OpenAI API key to this file
 
-4. **Add Transcripts:**
+5. **Add Transcripts:**
    - Create a `transcripts/` folder
    - Add your `.txt` transcript files
    - Optionally add a `Topic.txt` file with the main topic
@@ -68,7 +104,12 @@ This flash card application helps users learn and test their knowledge based on 
 
 ## Running the Application
 
+**Windows (Easy Method):**
+- Double-click `start_flashcards.bat`
+
+**Manual Method:**
 ```bash
+# Activate virtual environment first (if using)
 python app.py
 ```
 
@@ -104,21 +145,28 @@ Access the application at `http://localhost:5000/`
 
 ```
 transcript-flash-cards/
-├── app.py              # Main application file
-├── openaikey.txt       # OpenAI API key
-├── requirements.txt    # Dependencies
+├── app.py                    # Main application file
+├── start_flashcards.bat      # Windows launcher (auto-setup)
+├── stop_flashcards.bat       # Windows stop script
+├── requirements.txt          # Python dependencies
+├── openaikey.txt             # OpenAI API key (create this)
+├── secret_key.txt            # Auto-generated session key
+├── .venv/                    # Virtual environment (auto-created)
+├── .flask_session/           # Server-side session data
 ├── static/
-│   └── style.css      # Application styling
+│   └── style.css            # Application styling
 ├── templates/         
-│   ├── base.html      # Base template
-│   ├── index.html     # Home page
-│   ├── start.html     # Session configuration
-│   ├── flashcard.html # Card display
-│   ├── results.html   # Session results
-│   └── stats.html     # Statistics display
-└── transcripts/
-    ├── Topic.txt      # Optional main topic
-    └── *.txt          # Transcript files
+│   ├── base.html            # Base template
+│   ├── index.html           # Home page
+│   ├── start.html           # Session configuration
+│   ├── flashcard_scroll.html # Card display with scrolling
+│   ├── results.html         # Session results
+│   └── stats.html           # Statistics display
+├── transcripts/
+│   ├── Topic.txt            # Optional main topic context
+│   └── *.txt                # Video transcript files
+├── flashcards.json          # Generated flashcards cache
+└── history.json             # Session history data
 ```
 
 ## Data Persistence
