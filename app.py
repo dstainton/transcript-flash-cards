@@ -75,7 +75,7 @@ with open('openaikey.txt', 'r') as file:
 client = openai.OpenAI(api_key=api_key)
 
 # Configurable parameters
-CARDS_PER_TRANSCRIPT = 15  # Default number of cards per transcript
+CARDS_PER_TRANSCRIPT = 25  # Default number of cards per transcript
 TIME_PER_CARD = 10  # Default time per card in seconds
 TOTAL_EXAM_TIME = 60  # Default total exam time in minutes
 
@@ -185,33 +185,31 @@ def generate_flashcards(transcript, filename, main_topic=None):
     Each flashcard object must have these exact keys: 'question', 'answer', and optionally 'options'.
     Format the response as a JSON array without any additional text or explanation.
 
-    IMPORTANT: Create ONLY these question types:
-    - True/False questions (answer: "True" or "False")
-    - Yes/No questions (answer: "Yes" or "No") 
-    - Multiple Choice questions (answer: single letter like "A", "B", "C", "D" and include "options" array)
-    - Multiple Answer questions (answer: comma-separated letters like "A,C" and include "options" array)
+    CRITICAL RULES FOR QUESTION TYPES:
+    
+    1. TRUE/FALSE questions: Use ONLY for statements that can be evaluated as factually true or false.
+       - Answer MUST be exactly "True" or "False" (capitalized)
+       - Question should be a statement, not a question
+       - Example: "The Product Owner is responsible for maximizing product value."
+       
+    2. YES/NO questions: Use ONLY for questions asking about permissions, recommendations, or subjective matters.
+       - Answer MUST be exactly "Yes" or "No" (capitalized)
+       - Question should end with a question mark
+       - Example: "Should the team estimate in story points?"
+       
+    3. MULTIPLE CHOICE: Use for questions with one correct answer from several options.
+       - Answer MUST be a single letter: "A", "B", "C", or "D"
+       - MUST include "options" array with 4 choices formatted as "A) text", "B) text", etc.
+       - Example: {{"question": "What is the primary role of a Product Owner?", "answer": "A", "options": ["A) Maximize product value", "B) Write code", "C) Manage the team", "D) Create documentation"]}}
+       
+    4. MULTIPLE ANSWER: Use for questions where multiple options can be correct.
+       - Answer MUST be comma-separated letters like "A,C" or "B,C,D" (no spaces)
+       - MUST include "options" array with choices formatted as "A) text", "B) text", etc.
+       - Question should indicate multiple answers needed: "(Select all that apply)" or "Which of the following..."
+       - Example: {{"question": "Which of the following are Scrum values? (Select all that apply)", "answer": "A,C,D", "options": ["A) Courage", "B) Speed", "C) Focus", "D) Respect"]}}
 
-    Example format:
-    [
-        {{
-            "question": "Is this a true/false question?",
-            "answer": "True"
-        }},
-        {{
-            "question": "Should this answer be yes/no?",
-            "answer": "Yes"
-        }},
-        {{
-            "question": "What is the primary role of a Product Owner?",
-            "answer": "A",
-            "options": ["A) Maximize product value", "B) Write code", "C) Manage the team", "D) Create documentation"]
-        }},
-        {{
-            "question": "Which of the following are Scrum values? (Select all that apply)",
-            "answer": "A,C,D",
-            "options": ["A) Courage", "B) Speed", "C) Focus", "D) Respect"]
-        }}
-    ]
+    DO NOT mix question types! If the question asks "Is...", use True/False. If it asks "Should..." or "Can...", use Yes/No.
+    Ensure answers match the question type exactly.
 
     Transcript:
     {transcript}
@@ -219,26 +217,40 @@ def generate_flashcards(transcript, filename, main_topic=None):
     try:
         print("  Sending request to OpenAI API...")
         response = client.chat.completions.create(
-            model="gpt-4.1",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "system", 
-                    "content": "You are a helpful assistant that generates flashcards with very concise answers. "
-                              "Answers must be True/False, Yes/No, single letter (A,B,C,D), or comma-separated letters (A,C,D)."
-                              "Each type of answer must be represented in the set of flashcards."
-                              "Ignore anecdotes, jokes, stories, and other irrelevent information."
+                    "content": "You are a helpful assistant that generates exam-style flashcards. "
+                              "STRICT RULES: "
+                              "1) True/False questions MUST have answers of exactly 'True' or 'False' (capitalized) and be statements. "
+                              "2) Yes/No questions MUST have answers of exactly 'Yes' or 'No' (capitalized) and be questions about permissions or recommendations. "
+                              "3) Multiple Choice MUST have single letter answers (A, B, C, or D) with an options array. "
+                              "4) Multiple Answer MUST have comma-separated letters (e.g., 'A,C') with an options array. "
+                              "NEVER mix up question types with answer types. "
+                              "Focus on key concepts and ignore anecdotes, jokes, or stories."
                 },
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=2000,
+            max_tokens=4000,
             n=1,
-            temperature=0.5,
+            temperature=0.4,
         )
         print("  Received response from OpenAI API")
         
         flashcards_json = response.choices[0].message.content.strip()
         print("  Raw response:")
         print(flashcards_json)
+        
+        # Remove markdown code blocks if present
+        if flashcards_json.startswith('```'):
+            # Find the first newline after ```json or ```
+            first_newline = flashcards_json.find('\n')
+            # Find the last ``` marker
+            last_marker = flashcards_json.rfind('```')
+            if first_newline != -1 and last_marker != -1:
+                flashcards_json = flashcards_json[first_newline+1:last_marker].strip()
+                print("  Removed markdown code blocks from response")
         
         try:
             flashcards = json.loads(flashcards_json)
@@ -263,6 +275,8 @@ def generate_flashcards(transcript, filename, main_topic=None):
 
 # Load flashcards at startup
 flashcards = load_transcripts('transcripts')  # Ensure transcripts are in 'transcripts' folder
+
+print(f"\n***** FLASHCARDS LOADED: {len(flashcards)} total flashcards *****\n")
 
 # Shuffle flashcards
 random.shuffle(flashcards)
@@ -343,6 +357,9 @@ def test():
 @app.route('/start', methods=['GET', 'POST'])
 def start():
     if request.method == 'POST':
+        print(f"\n===== START ROUTE POST REQUEST =====")
+        print(f"Flashcards available globally: {len(flashcards)}")
+        
         if not request.form.getlist('topics'):
             flash('Please select at least one topic', 'error')
             return redirect(url_for('start'))
@@ -409,9 +426,16 @@ def start():
             
         session['total_cards'] = len(session['flashcards'])
         print(f"Total cards set to: {session['total_cards']}")
+        
+        # Debug: Show first few topics from flashcards
+        if flashcards:
+            sample_topics = list(set(card['topic'] for card in flashcards[:10]))
+            print(f"Sample topics from flashcards: {sample_topics}")
             
         if not session['flashcards']:  # If no flashcards match the selected topics
             print("ERROR: No flashcards found - redirecting back to start")
+            print(f"Selected topics were: {selected_topics}")
+            print(f"Total flashcards globally: {len(flashcards)}")
             return render_template('start.html', 
                                 topics=sorted(set(card['topic'] for card in flashcards)),
                                 error="No flashcards found for selected topics")
