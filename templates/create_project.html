@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+
+{% block title %}Create Project{% endblock %}
+
+{% block content %}
+<div class="card create-project-card">
+    <h1>🎯 Create New Project</h1>
+    <p class="page-description">Review AI-generated suggestions and create your project</p>
+    
+    <div class="document-info">
+        <p>📄 Processed <strong>{{ document_count }}</strong> document{{ 's' if document_count != 1 else '' }}</p>
+    </div>
+    
+    <form method="POST" class="create-project-form">
+        <!-- Project Name -->
+        <div class="form-group">
+            <label for="project_name">
+                <strong>Project Name</strong>
+                <span class="ai-badge">✨ AI Suggested</span>
+            </label>
+            <input type="text" 
+                   id="project_name" 
+                   name="project_name" 
+                   class="form-input" 
+                   value="{{ suggested_name }}" 
+                   placeholder="Enter project name"
+                   required>
+            <p class="input-hint">You can modify the AI-generated name or use your own</p>
+        </div>
+        
+        <!-- Topics Preview -->
+        <div class="form-group">
+            <label>
+                <strong>Topics & Flashcard Plan</strong>
+                <span class="ai-badge">✨ AI Suggested</span>
+            </label>
+            
+            {% if suggested_topics %}
+            <div class="topics-preview">
+                {% for topic in suggested_topics %}
+                <div class="topic-card">
+                    <div class="topic-header">
+                        <span class="topic-icon">📝</span>
+                        <span class="topic-name">{{ topic.name }}</span>
+                    </div>
+                    <div class="topic-cards-count">
+                        {{ topic.flashcard_count }} flashcards
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div class="topics-summary">
+                    <strong>Total:</strong> 
+                    {{ suggested_topics|length }} topics, 
+                    {{ suggested_topics|sum(attribute='flashcard_count') }} flashcards
+                </div>
+            </div>
+            {% else %}
+            <p class="no-topics">No topics could be extracted. Please try uploading different documents.</p>
+            {% endif %}
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="button-group">
+            <button type="submit" class="button button-success" {% if not suggested_topics %}disabled{% endif %}>
+                🚀 Create Project & Generate Flashcards
+            </button>
+            <a href="{{ url_for('upload_documents') }}" class="button button-secondary">
+                ← Back to Upload
+            </a>
+        </div>
+        
+        <div class="processing-note">
+            <p><strong>Note:</strong> Project creation may take 1-2 minutes depending on the number of flashcards being generated.</p>
+        </div>
+    </form>
+</div>
+
+<style>
+.create-project-card {
+    max-width: 800px;
+    margin: 2rem auto;
+}
+
+.page-description {
+    text-align: center;
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.document-info {
+    background: linear-gradient(135deg, #f0f7ff 0%, #e6f2ff 100%);
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    text-align: center;
+    margin-bottom: 2rem;
+    border: 2px solid #4a90e2;
+}
+
+.document-info p {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.create-project-form {
+    margin-top: 2rem;
+}
+
+.form-group {
+    margin-bottom: 2rem;
+}
+
+.form-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 0.8rem;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.ai-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #d0d0d0;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.input-hint {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.topics-preview {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 2px solid #e0e0e0;
+}
+
+.topic-card {
+    background: white;
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    margin-bottom: 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 2px solid #e0e0e0;
+    transition: all 0.2s ease;
+}
+
+.topic-card:hover {
+    border-color: #4a90e2;
+    transform: translateX(4px);
+}
+
+.topic-card:last-of-type {
+    margin-bottom: 0;
+}
+
+.topic-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.topic-icon {
+    font-size: 1.3rem;
+}
+
+.topic-name {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 1rem;
+}
+
+.topic-cards-count {
+    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.topics-summary {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 2px solid #e0e0e0;
+    text-align: center;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.no-topics {
+    background: #fff3cd;
+    padding: 1.5rem;
+    border-radius: 8px;
+    color: #856404;
+    text-align: center;
+    border: 2px solid #ffeaa7;
+}
+
+.processing-note {
+    background: #fff3cd;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin-top: 1.5rem;
+    border: 1px solid #ffeaa7;
+}
+
+.processing-note p {
+    margin: 0;
+    color: #856404;
+    font-size: 0.95rem;
+}
+
+.button-success {
+    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+}
+
+.button-success:hover:not(:disabled) {
+    background: linear-gradient(135deg, #229954 0%, #1e8449 100%);
+}
+
+.button-success:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+@media (max-width: 768px) {
+    .topic-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.8rem;
+    }
+    
+    .topic-cards-count {
+        align-self: flex-end;
+    }
+}
+</style>
+
+<!-- Add loading overlay for form submission -->
+<div id="loadingOverlay" style="display: none;">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <h2>Creating Your Project...</h2>
+        <p>Generating flashcards with AI. This may take 1-2 minutes.</p>
+        <div class="loading-steps">
+            <div class="step active">📝 Analyzing content</div>
+            <div class="step">🎯 Generating flashcards</div>
+            <div class="step">💾 Saving project</div>
+        </div>
+    </div>
+</div>
+
+<style>
+#loadingOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-content {
+    background: white;
+    padding: 3rem 2rem;
+    border-radius: 16px;
+    text-align: center;
+    max-width: 500px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 5px solid #e0e0e0;
+    border-top: 5px solid #4a90e2;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1.5rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-content h2 {
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+.loading-content p {
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.loading-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    align-items: flex-start;
+}
+
+.step {
+    padding: 0.6rem 1rem;
+    background: #f8f9fa;
+    border-radius: 6px;
+    color: #999;
+    width: 100%;
+    text-align: left;
+    transition: all 0.3s ease;
+}
+
+.step.active {
+    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    color: white;
+    font-weight: 600;
+}
+</style>
+
+<script>
+document.querySelector('.create-project-form').addEventListener('submit', function(e) {
+    // Show loading overlay
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    // Animate through steps
+    let stepIndex = 0;
+    const steps = document.querySelectorAll('.step');
+    const stepInterval = setInterval(() => {
+        if (stepIndex < steps.length) {
+            steps.forEach(s => s.classList.remove('active'));
+            steps[stepIndex].classList.add('active');
+            stepIndex++;
+        }
+    }, 2000); // Change step every 2 seconds
+    
+    // Clear interval when form actually submits
+    setTimeout(() => clearInterval(stepInterval), 10000);
+});
+</script>
+{% endblock %}
+

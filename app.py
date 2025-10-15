@@ -313,6 +313,159 @@ def generate_flashcards(transcript, filename, main_topic=None):
         print(f"  Error generating flashcards: {e}")
         return []
 
+def generate_project_name_from_text(text):
+    """Use AI to generate a concise project name from document text"""
+    # Truncate text to avoid token limits (first 3000 characters)
+    sample_text = text[:3000]
+    
+    prompt = f"""
+    Based on the following document content, generate a short, concise project name (3-6 words max).
+    The name should capture the main topic or subject matter.
+    Respond with ONLY the project name, nothing else.
+    
+    Document content:
+    {sample_text}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",  # Use mini for simple tasks
+            messages=[
+                {"role": "system", "content": "You generate concise, descriptive project names."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=50,
+            temperature=0.5,
+        )
+        
+        project_name = response.choices[0].message.content.strip()
+        # Remove quotes if present
+        project_name = project_name.strip('"\'')
+        print(f"Generated project name: {project_name}")
+        return project_name
+    
+    except Exception as e:
+        print(f"Error generating project name: {e}")
+        return "New Project"
+
+def extract_topics_from_text(text):
+    """Use AI to extract topics and determine flashcard count per topic"""
+    # Truncate text to avoid token limits (first 5000 characters)
+    sample_text = text[:5000]
+    
+    prompt = f"""
+    Analyze the following document content and extract 3-8 main topics/sections.
+    For each topic, suggest an appropriate number of flashcards (5-25 per topic).
+    
+    Return your response as a JSON array of objects with this exact structure:
+    [{{"name": "Topic Name", "flashcard_count": 10}}]
+    
+    Consider the complexity and importance of each topic when determining flashcard counts.
+    Respond with ONLY the JSON array, no additional text.
+    
+    Document content:
+    {sample_text}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert at analyzing educational content and extracting key topics."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.3,
+        )
+        
+        topics_json = response.choices[0].message.content.strip()
+        
+        # Remove markdown code blocks if present
+        if topics_json.startswith('```'):
+            first_newline = topics_json.find('\n')
+            last_marker = topics_json.rfind('```')
+            if first_newline != -1 and last_marker != -1:
+                topics_json = topics_json[first_newline+1:last_marker].strip()
+        
+        topics = json.loads(topics_json)
+        print(f"Extracted {len(topics)} topics")
+        return topics
+    
+    except Exception as e:
+        print(f"Error extracting topics: {e}")
+        return []
+
+def generate_flashcards_from_text(text, topic_name, num_cards):
+    """Generate flashcards for a specific topic from document text"""
+    prompt = f"""
+    Generate exactly {num_cards} flashcards about "{topic_name}" from the following content.
+    The response must be a valid JSON array containing flashcard objects.
+    Each flashcard object must have these exact keys: 'question', 'answer', and optionally 'options'.
+    Format the response as a JSON array without any additional text or explanation.
+
+    CRITICAL RULES FOR QUESTION TYPES:
+    
+    1. TRUE/FALSE questions: Use ONLY for statements that can be evaluated as factually true or false.
+       - Answer MUST be exactly "True" or "False" (capitalized)
+       - Question should be a statement, not a question
+       
+    2. YES/NO questions: Use ONLY for questions asking about permissions, recommendations, or subjective matters.
+       - Answer MUST be exactly "Yes" or "No" (capitalized)
+       - Question should end with a question mark
+       
+    3. MULTIPLE CHOICE: Use for questions with one correct answer from several options.
+       - Answer MUST be a single letter: "A", "B", "C", or "D"
+       - MUST include "options" array with 4 choices formatted as "A) text", "B) text", etc.
+       
+    4. MULTIPLE ANSWER: Use for questions where multiple options can be correct.
+       - Answer MUST be comma-separated letters like "A,C" or "B,C,D" (no spaces)
+       - MUST include "options" array with choices formatted as "A) text", "B) text", etc.
+       - Question should indicate multiple answers needed
+
+    Document content:
+    {text[:4000]}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You generate high-quality flashcards from educational content. "
+                              "Follow the question type rules strictly."
+                },
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=3000,
+            temperature=0.4,
+        )
+        
+        flashcards_json = response.choices[0].message.content.strip()
+        
+        # Remove markdown code blocks if present
+        if flashcards_json.startswith('```'):
+            first_newline = flashcards_json.find('\n')
+            last_marker = flashcards_json.rfind('```')
+            if first_newline != -1 and last_marker != -1:
+                flashcards_json = flashcards_json[first_newline+1:last_marker].strip()
+        
+        flashcards = json.loads(flashcards_json)
+        
+        # Add metadata to each card
+        for card in flashcards:
+            card['topic'] = topic_name
+            card['correct_count'] = 0
+            card['attempts'] = 0
+            card['answer_type'] = get_answer_type(card['answer'])
+        
+        print(f"Generated {len(flashcards)} flashcards for topic '{topic_name}'")
+        return flashcards
+    
+    except Exception as e:
+        print(f"Error generating flashcards for topic '{topic_name}': {e}")
+        return []
+
 # Project-aware helper functions for mastery
 def get_card_hash(question):
     """Generate a unique hash for a flashcard question"""
@@ -1077,6 +1230,103 @@ def upload_documents():
     
     # GET request - show upload page
     return render_template('upload_documents.html')
+
+@app.route('/create-project-from-documents', methods=['GET', 'POST'])
+def create_project_from_documents():
+    """Create a new project from uploaded documents using AI"""
+    # Check if there's pending project data
+    if 'pending_project' not in session:
+        flash('No pending project found. Please upload documents first.', 'error')
+        return redirect(url_for('upload_documents'))
+    
+    pending = session['pending_project']
+    
+    if request.method == 'POST':
+        try:
+            # Get custom project name if provided, otherwise use AI-generated
+            project_name = request.form.get('project_name', '').strip()
+            
+            if not project_name:
+                # Use AI to generate project name
+                project_name = generate_project_name_from_text(pending['extracted_text'])
+            
+            # Extract topics using AI
+            topics = extract_topics_from_text(pending['extracted_text'])
+            
+            if not topics:
+                flash('Failed to extract topics from documents', 'error')
+                return redirect(url_for('create_project_from_documents'))
+            
+            # Create the new project
+            new_project = project_manager.create_project(project_name)
+            
+            # Move uploaded documents to project's documents folder
+            import shutil
+            for temp_filepath in pending['documents']:
+                if os.path.exists(temp_filepath):
+                    filename = os.path.basename(temp_filepath)
+                    dest_path = os.path.join(new_project.documents_folder, filename)
+                    shutil.move(temp_filepath, dest_path)
+            
+            # Generate flashcards for each topic
+            total_flashcards_generated = 0
+            for topic_info in topics:
+                topic_name = topic_info['name']
+                num_cards = topic_info['flashcard_count']
+                
+                # Extract relevant text for this topic (simplified - uses all text for now)
+                topic_flashcards = generate_flashcards_from_text(
+                    pending['extracted_text'],
+                    topic_name,
+                    num_cards
+                )
+                
+                # Add to project
+                new_project.flashcards.extend(topic_flashcards)
+                total_flashcards_generated += len(topic_flashcards)
+            
+            # Save the project
+            new_project.save_flashcards()
+            
+            # Clean up temp directory
+            temp_dir = os.path.join(os.getcwd(), 'temp_uploads')
+            if os.path.exists(temp_dir):
+                try:
+                    shutil.rmtree(temp_dir)
+                    os.makedirs(temp_dir, exist_ok=True)
+                except:
+                    pass
+            
+            # Clear pending project from session
+            del session['pending_project']
+            
+            # Set as current project
+            set_current_project(new_project.id)
+            
+            flash(f'Project "{project_name}" created with {total_flashcards_generated} flashcards across {len(topics)} topics!', 'success')
+            return redirect(url_for('start'))
+        
+        except Exception as e:
+            flash(f'Error creating project: {str(e)}', 'error')
+            print(f"Error in create_project_from_documents: {e}")
+            import traceback
+            traceback.print_exc()
+            return redirect(url_for('create_project_from_documents'))
+    
+    # GET request - show project setup page
+    # Generate AI suggestions
+    try:
+        suggested_name = generate_project_name_from_text(pending['extracted_text'])
+        suggested_topics = extract_topics_from_text(pending['extracted_text'])
+    except Exception as e:
+        print(f"Error generating AI suggestions: {e}")
+        suggested_name = "New Project"
+        suggested_topics = []
+    
+    return render_template('create_project.html',
+                         suggested_name=suggested_name,
+                         suggested_topics=suggested_topics,
+                         document_count=pending['document_count'])
 
 # Update the route decorator to match the name used in templates
 @app.route('/exit', methods=['POST'])
