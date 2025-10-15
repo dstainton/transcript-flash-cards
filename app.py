@@ -960,25 +960,25 @@ def results():
     # Check if results have already been saved for this session to prevent duplicates
     if session.get('results_saved', False):
         # Results already saved, just display them
-    if mode == 'exam':
-        user_answers = session.get('user_answers', [])
-        score = 0
-        results = []
-        
-        for answer in user_answers:
-            correct = check_answer(answer['question'], answer['user_answer'], answer['correct_answer'])
-            results.append({
-                'question': answer['question'],
-                'user_answer': answer['user_answer'],
-                'correct_answer': answer['correct_answer'],
-                'is_correct': correct
-            })
-            if correct:
-                score += 1
-                
-        total_questions = len(user_answers)
-        percentage = calculate_percentage(score, total_questions)
-        
+        if mode == 'exam':
+            user_answers = session.get('user_answers', [])
+            score = 0
+            results = []
+            
+            for answer in user_answers:
+                correct = check_answer(answer['question'], answer['user_answer'], answer['correct_answer'])
+                results.append({
+                    'question': answer['question'],
+                    'user_answer': answer['user_answer'],
+                    'correct_answer': answer['correct_answer'],
+                    'is_correct': correct
+                })
+                if correct:
+                    score += 1
+                    
+            total_questions = len(user_answers)
+            percentage = calculate_percentage(score, total_questions)
+            
             return render_template('results.html',
                                  mode=mode,
                                  total_questions=total_questions,
