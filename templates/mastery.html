@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Mastery Progress{% endblock %}
+
+{% block content %}
+<div class="stats-container">
+    <div class="card stats-card">
+        <h1>Card Mastery Progress</h1>
+        <p class="mastery-description">
+            Track your learning progress across all topics. Cards become "mastered" when you answer them correctly 3 times in a row during study sessions. Mastered cards won't appear in future study sessions for that topic.
+        </p>
+        
+        {% if mastery_stats %}
+        <div class="mastery-overview">
+            <h2>Overall Progress</h2>
+            {% set total_cards = mastery_stats.values()|map(attribute='total')|sum %}
+            {% set total_mastered = mastery_stats.values()|map(attribute='mastered')|sum %}
+            {% set overall_percentage = (total_mastered / total_cards * 100) if total_cards > 0 else 0 %}
+            
+            <div class="overall-progress-bar">
+                <div class="progress-bar-fill" style="width: {{ overall_percentage }}%"></div>
+            </div>
+            <p class="overall-stats">
+                <strong>{{ total_mastered }}</strong> of <strong>{{ total_cards }}</strong> cards mastered 
+                (<strong>{{ "%.1f"|format(overall_percentage) }}%</strong>)
+            </p>
+        </div>
+
+        <div class="mastery-section">
+            <h2>Progress by Topic</h2>
+            <table class="stats-table mastery-table">
+                <thead>
+                    <tr>
+                        <th>Topic</th>
+                        <th>Progress</th>
+                        <th>Cards Mastered</th>
+                        <th>Percentage</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for topic, stats in mastery_stats.items()|sort %}
+                    {% set percentage = (stats.mastered / stats.total * 100) if stats.total > 0 else 0 %}
+                    <tr class="{% if stats.mastered == stats.total %}fully-mastered-row{% endif %}">
+                        <td>{{ topic }}</td>
+                        <td>
+                            <div class="topic-progress-bar">
+                                <div class="progress-bar-fill" style="width: {{ percentage }}%"></div>
+                            </div>
+                        </td>
+                        <td>{{ stats.mastered }}/{{ stats.total }}</td>
+                        <td>{{ "%.1f"|format(percentage) }}%</td>
+                        <td>
+                            {% if stats.mastered > 0 %}
+                            <form method="POST" action="{{ url_for('reset_mastery', topic=topic) }}" style="display: inline;">
+                                <button type="submit" class="button-small button-reset" 
+                                        onclick="return confirm('Are you sure you want to reset mastery for {{ topic }}? This will make all cards available for study again.')">
+                                    Reset
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="no-action">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="no-data">No mastery data available yet. Start studying to track your progress!</p>
+        {% endif %}
+
+        <div class="button-group">
+            <a href="{{ url_for('start') }}" class="button" title="Start a new study or exam session">Start New Session</a>
+            <a href="{{ url_for('stats') }}" class="button button-secondary">View Statistics</a>
+            <a href="{{ url_for('index') }}" class="button button-tertiary">Home</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.mastery-description {
+    background: #f0f8ff;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    line-height: 1.6;
+}
+
+.mastery-overview {
+    background: #f9f9f9;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+}
+
+.overall-progress-bar {
+    width: 100%;
+    height: 30px;
+    background: #e0e0e0;
+    border-radius: 15px;
+    overflow: hidden;
+    margin: 15px 0;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4CAF50, #8BC34A);
+    transition: width 0.3s ease;
+}
+
+.overall-stats {
+    text-align: center;
+    font-size: 1.1em;
+    margin-top: 10px;
+}
+
+.topic-progress-bar {
+    width: 200px;
+    height: 20px;
+    background: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.mastery-table td {
+    vertical-align: middle;
+}
+
+.fully-mastered-row {
+    background: #f1f8f4;
+}
+
+.button-small {
+    padding: 6px 12px;
+    font-size: 0.9em;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.button-reset {
+    background: #ff6b6b;
+    color: white;
+}
+
+.button-reset:hover {
+    background: #ee5555;
+}
+
+.no-action {
+    color: #999;
+}
+</style>
+{% endblock %}
+

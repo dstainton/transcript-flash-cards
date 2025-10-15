@@ -8,60 +8,119 @@
     
     <form method="POST" class="setup-form">
         <div class="form-section">
-            <h2>Select Topics</h2>
-            <div class="topic-grid">
-                <div class="checkbox-wrapper">
-                    <input type="checkbox" id="all" name="topics" value="all" checked>
-                    <label for="all">All Topics</label>
+            <h2>Study Mode</h2>
+            <div class="radio-group mode-selector">
+                <div class="radio-wrapper mode-option">
+                    <input type="radio" id="study" name="mode" value="study" checked>
+                    <label for="study" class="mode-label">
+                        <span class="mode-icon">📖</span>
+                        <div class="mode-details">
+                            <span class="mode-title">Study Mode</span>
+                            <span class="mode-description">Learn with spaced repetition, master cards</span>
+                        </div>
+                    </label>
                 </div>
-                {% for topic in topics %}
-                <div class="checkbox-wrapper">
-                    <input type="checkbox" id="{{ topic }}" name="topics" value="{{ topic }}" class="topic-checkbox">
-                    <label for="{{ topic }}">{{ topic }}</label>
+                <div class="radio-wrapper mode-option">
+                    <input type="radio" id="exam" name="mode" value="exam">
+                    <label for="exam" class="mode-label">
+                        <span class="mode-icon">⏱️</span>
+                        <div class="mode-details">
+                            <span class="mode-title">Exam Mode</span>
+                            <span class="mode-description">Timed test with random questions</span>
+                        </div>
+                    </label>
                 </div>
-                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-section exam-options-section" id="examOptions" style="display: none;">
+            <div class="exam-options-header">
+                <h3>⚙️ Exam Configuration</h3>
+                <p class="exam-options-description">Customize your exam settings below</p>
+            </div>
+            <div class="exam-options-grid">
+                <div class="exam-input-card">
+                    <label for="min_questions">
+                        <span class="input-icon">📊</span>
+                        <span class="input-label">Min Questions</span>
+                    </label>
+                    <input type="number" id="min_questions" name="min_questions" value="5" min="1" max="100">
+                </div>
+                <div class="exam-input-card">
+                    <label for="max_questions">
+                        <span class="input-icon">📈</span>
+                        <span class="input-label">Max Questions</span>
+                    </label>
+                    <input type="number" id="max_questions" name="max_questions" value="10" min="1" max="100">
+                </div>
+                <div class="exam-input-card">
+                    <label for="time_per_card">
+                        <span class="input-icon">⏱️</span>
+                        <span class="input-label">Time per Card (sec)</span>
+                    </label>
+                    <input type="number" id="time_per_card" name="time_per_card" 
+                           value="{{ time_per_card }}" min="5" max="300">
+                </div>
+                <div class="exam-input-card">
+                    <label for="total_exam_time">
+                        <span class="input-icon">⏰</span>
+                        <span class="input-label">Total Time (min)</span>
+                    </label>
+                    <input type="number" id="total_exam_time" name="total_exam_time" 
+                           value="{{ total_exam_time }}" min="1" max="180">
+                </div>
             </div>
         </div>
 
         <div class="form-section">
-            <h2>Study Mode</h2>
-            <div class="radio-group">
-                <div class="radio-wrapper">
-                    <input type="radio" id="study" name="mode" value="study" checked>
-                    <label for="study">Study Mode</label>
+            <h2>Select Topics</h2>
+            <div class="all-topics-selector">
+                <input type="checkbox" id="all" name="topics" value="all" checked>
+                <label for="all" class="all-topics-label">
+                    <span class="all-topics-icon">📚</span>
+                    <span>All Topics</span>
+                    <span class="all-topics-hint">(Or select individual topics below)</span>
+                </label>
+            </div>
+            
+            <div class="topics-scroll-container">
+                <div class="topic-grid">
+                {% for topic in topics %}
+                {% set stats = mastery_stats[topic] if mastery_stats and topic in mastery_stats else {'mastered': 0, 'total': 25} %}
+                {% set percentage = (stats.mastered / stats.total * 100) if stats.total > 0 else 0 %}
+                <div class="topic-card {% if stats.mastered == stats.total %}topic-fully-mastered{% elif stats.mastered > 0 %}topic-in-progress{% endif %}">
+                    <div class="topic-header">
+                        <input type="checkbox" id="{{ topic }}" name="topics" value="{{ topic }}" class="topic-checkbox">
+                        <label for="{{ topic }}" class="topic-label">
+                            <span class="topic-name">{{ topic }}</span>
+                            {% if stats.mastered == stats.total %}
+                            <span class="status-icon completed">✓</span>
+                            {% elif stats.mastered > 0 %}
+                            <span class="status-icon in-progress">●</span>
+                            {% endif %}
+                        </label>
+                    </div>
+                    <div class="topic-progress-container">
+                        <div class="topic-progress-bar-wrapper">
+                            <div class="topic-progress-bar-fill" style="width: {{ percentage }}%"></div>
+                        </div>
+                        <div class="topic-stats">
+                            <span class="mastered-count">{{ stats.mastered }}/{{ stats.total }}</span>
+                            <span class="percentage">{{ "%.0f"|format(percentage) }}%</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="radio-wrapper">
-                    <input type="radio" id="exam" name="mode" value="exam">
-                    <label for="exam">Exam Mode</label>
+                {% endfor %}
                 </div>
             </div>
         </div>
 
-        <div class="form-section" id="examOptions" style="display: none;">
-            <h2>Exam Options</h2>
-            <div class="input-group">
-                <div class="input-wrapper">
-                    <label for="min_questions">Minimum Questions:</label>
-                    <input type="number" id="min_questions" name="min_questions" value="5" min="1">
-                </div>
-                <div class="input-wrapper">
-                    <label for="max_questions">Maximum Questions:</label>
-                    <input type="number" id="max_questions" name="max_questions" value="10" min="1">
-                </div>
-                <div class="input-wrapper">
-                    <label for="time_per_card">Time per card (seconds):</label>
-                    <input type="number" id="time_per_card" name="time_per_card" 
-                           value="{{ time_per_card }}" min="5">
-                </div>
-                <div class="input-wrapper">
-                    <label for="total_exam_time">Time Limit (minutes):</label>
-                    <input type="number" id="total_exam_time" name="total_exam_time" 
-                           value="{{ total_exam_time }}" min="1">
-                </div>
-            </div>
+        <div class="button-container">
+            <button type="submit" class="button button-large button-primary">
+                <span class="button-icon">🚀</span>
+                Start Session
+            </button>
         </div>
-
-        <button type="submit" class="button">Start Session</button>
     </form>
 
     {% if error %}
@@ -76,9 +135,17 @@
 <script>
 document.getElementById('all').addEventListener('change', function() {
     const topicCheckboxes = document.querySelectorAll('.topic-checkbox');
+    const topicCards = document.querySelectorAll('.topic-card');
     topicCheckboxes.forEach(checkbox => {
         checkbox.checked = false;
         checkbox.disabled = this.checked;
+    });
+    topicCards.forEach(card => {
+        if (this.checked) {
+            card.style.opacity = '0.6';
+        } else {
+            card.style.opacity = '1';
+        }
     });
 });
 
@@ -87,6 +154,23 @@ document.querySelectorAll('.topic-checkbox').forEach(checkbox => {
         const allCheckbox = document.getElementById('all');
         if (this.checked) {
             allCheckbox.checked = false;
+            document.querySelectorAll('.topic-card').forEach(card => {
+                card.style.opacity = '1';
+            });
+        }
+    });
+});
+
+// Make entire topic card clickable
+document.querySelectorAll('.topic-card').forEach(card => {
+    card.addEventListener('click', function(e) {
+        // Don't toggle if clicking the checkbox directly
+        if (e.target.type === 'checkbox') return;
+        
+        const checkbox = this.querySelector('.topic-checkbox');
+        if (!checkbox.disabled) {
+            checkbox.checked = !checkbox.checked;
+            checkbox.dispatchEvent(new Event('change'));
         }
     });
 });
@@ -94,8 +178,24 @@ document.querySelectorAll('.topic-checkbox').forEach(checkbox => {
 document.querySelectorAll('input[name="mode"]').forEach(radio => {
     radio.addEventListener('change', function() {
         const examOptions = document.getElementById('examOptions');
-        examOptions.style.display = this.value === 'exam' ? 'block' : 'none';
+        if (this.value === 'exam') {
+            examOptions.style.display = 'block';
+            // Trigger reflow to ensure animation plays
+            examOptions.offsetHeight;
+        } else {
+            examOptions.style.display = 'none';
+        }
     });
+});
+
+// Initialize disabled state on page load
+window.addEventListener('load', function() {
+    const allCheckbox = document.getElementById('all');
+    if (allCheckbox.checked) {
+        document.querySelectorAll('.topic-card').forEach(card => {
+            card.style.opacity = '0.6';
+        });
+    }
 });
 </script>
 {% endblock %}

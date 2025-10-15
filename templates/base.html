@@ -11,10 +11,11 @@
         <div class="nav-content">
             <a href="{{ url_for('index') }}" class="nav-brand">Flash Cards</a>
             <div class="nav-links">
+                <a href="{{ url_for('mastery') }}">Mastery</a>
                 <a href="{{ url_for('stats') }}">Statistics</a>
                 {% if 'mode' in session %}
                     <form method="POST" action="{{ url_for('exit') }}" class="inline-form">
-                        <button type="submit" class="nav-link-button">Exit Session</button>
+                        <button type="submit" class="nav-link-button" title="Exit current session and save progress">Exit Session</button>
                     </form>
                 {% endif %}
             </div>
@@ -22,6 +23,18 @@
     </nav>
     
     <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flash-messages">
+                    {% for category, message in messages %}
+                        <div class="flash-message flash-{{ category }}">
+                            {{ message }}
+                            <button onclick="this.parentElement.remove()" class="flash-close">×</button>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </div>
 

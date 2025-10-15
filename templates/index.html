@@ -8,7 +8,8 @@
     <p>Start a new study session or test your knowledge with an exam.</p>
     <div class="button-group">
         <a href="{{ url_for('start') }}" class="button">Get Started</a>
-        <a href="{{ url_for('stats') }}" class="button button-secondary">View Statistics</a>
+        <a href="{{ url_for('mastery') }}" class="button button-secondary">View Mastery Progress</a>
+        <a href="{{ url_for('stats') }}" class="button button-tertiary">View Statistics</a>
     </div>
 </div>
 {% endblock %}

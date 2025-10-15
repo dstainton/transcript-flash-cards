@@ -333,6 +333,74 @@ def cleanup_old_history(days=30):
 # Load history at startup
 load_history()
 
+# Persistent storage for mastered cards
+mastered_cards = {}  # Structure: {question_hash: {'question': str, 'topic': str, 'mastered_date': str}}
+
+def get_card_hash(question):
+    """Generate a unique hash for a flashcard question"""
+    import hashlib
+    return hashlib.md5(question.encode('utf-8')).hexdigest()
+
+def save_mastery():
+    """Save mastered cards to JSON file"""
+    try:
+        with open('mastery.json', 'w', encoding='utf-8') as f:
+            json.dump(mastered_cards, f, indent=2)
+    except Exception as e:
+        print(f"Error saving mastery data: {e}")
+
+def load_mastery():
+    """Load mastered cards from JSON file"""
+    global mastered_cards
+    try:
+        if os.path.exists('mastery.json'):
+            with open('mastery.json', 'r', encoding='utf-8') as f:
+                mastered_cards = json.load(f)
+    except Exception as e:
+        print(f"Error loading mastery data: {e}")
+        mastered_cards = {}
+
+def mark_card_mastered(card):
+    """Mark a card as mastered"""
+    card_hash = get_card_hash(card['question'])
+    mastered_cards[card_hash] = {
+        'question': card['question'],
+        'topic': card['topic'],
+        'filename': card.get('filename', 'Unknown'),
+        'mastered_date': datetime.now().isoformat()
+    }
+    save_mastery()
+
+def is_card_mastered(card):
+    """Check if a card is mastered"""
+    card_hash = get_card_hash(card['question'])
+    return card_hash in mastered_cards
+
+def reset_topic_mastery(topic):
+    """Reset all mastered cards for a specific topic"""
+    global mastered_cards
+    mastered_cards = {
+        k: v for k, v in mastered_cards.items() 
+        if v['topic'] != topic
+    }
+    save_mastery()
+
+def get_mastery_stats():
+    """Get mastery statistics by topic"""
+    stats = defaultdict(lambda: {'mastered': 0, 'total': 0})
+    
+    # Count total cards per topic
+    for card in flashcards:
+        topic = card['topic']
+        stats[topic]['total'] += 1
+        if is_card_mastered(card):
+            stats[topic]['mastered'] += 1
+    
+    return dict(stats)
+
+# Load mastery data at startup
+load_mastery()
+
 # Routes
 
 @app.route('/')
@@ -370,7 +438,7 @@ def start():
         print(f"Raw topics list: {list(selected_topics)}")
         
         # Reset specific session keys to ensure clean start
-        keys_to_reset = ['mode', 'user_answers', 'exam_questions', 'completed_cards', 'current_card_index', 'score', 'start_time', 'topics', 'total_attempts', 'exam_start_time', 'exam_duration_seconds', 'question_start_time', 'question_duration_seconds', 'flashcards', 'total_cards', 'time_per_card', 'total_exam_time']
+        keys_to_reset = ['mode', 'user_answers', 'exam_questions', 'completed_cards', 'current_card_index', 'score', 'start_time', 'topics', 'total_attempts', 'exam_start_time', 'exam_duration_seconds', 'question_start_time', 'question_duration_seconds', 'flashcards', 'total_cards', 'time_per_card', 'total_exam_time', 'results_saved']
         for key in keys_to_reset:
             if key in session:
                 del session[key]
@@ -423,6 +491,15 @@ def start():
         else:
             session['flashcards'] = [card for card in flashcards if card['topic'] in selected_topics]
             print(f"Filtered flashcards: {len(session['flashcards'])}")
+        
+        # In study mode, filter out already mastered cards
+        if session['mode'] == 'study':
+            original_count = len(session['flashcards'])
+            session['flashcards'] = [card for card in session['flashcards'] if not is_card_mastered(card)]
+            mastered_count = original_count - len(session['flashcards'])
+            if mastered_count > 0:
+                print(f"Filtered out {mastered_count} already mastered cards")
+                flash(f"{mastered_count} card(s) already mastered in selected topics", 'info')
             
         session['total_cards'] = len(session['flashcards'])
         print(f"Total cards set to: {session['total_cards']}")
@@ -455,10 +532,12 @@ def start():
         
         return redirect(url_for('flashcard'))
     else:
-        # Get unique topics from flashcards
+        # Get unique topics from flashcards with mastery stats
         topics = sorted(set(card['topic'] for card in flashcards))
+        mastery_stats = get_mastery_stats()
         return render_template('start.html', 
                              topics=topics,
+                             mastery_stats=mastery_stats,
                              time_per_card=TIME_PER_CARD,
                              total_exam_time=TOTAL_EXAM_TIME)
 
@@ -624,14 +703,32 @@ def flashcard():
             session['question_start_time'] = datetime.now().isoformat()  # Reset question timer for next question
         else:
             correct = check_answer(card['question'], user_answer, card['answer'])
-            feedback = get_feedback(card['question'], user_answer, card['answer'], correct)
-
+            
+            # Track streak for this specific card
+            card_hash = get_card_hash(card['question'])
+            current_streak = session.get(f'streak_{card_hash}', 0)
+            
             if correct:
                 session['score'] += 1
-                card['correct_count'] = session.get(f'correct_count_{current_card_index}', 0) + 1
-                session[f'correct_count_{current_card_index}'] = card['correct_count']
+                current_streak += 1
+                session[f'streak_{card_hash}'] = current_streak
             else:
-                session[f'correct_count_{current_card_index}'] = 0
+                current_streak = 0
+                session[f'streak_{card_hash}'] = 0
+            
+            # Generate feedback with streak information
+            base_feedback = get_feedback(card['question'], user_answer, card['answer'], correct)
+            mastered = False
+            
+            if correct and current_streak < 3:
+                feedback = f"{base_feedback} 🔥 Streak: {current_streak}/3"
+            elif correct and current_streak >= 3:
+                feedback = f"{base_feedback} 🎉 CARD MASTERED! You answered correctly 3 times in a row!"
+                mastered = True
+                # Mark the card as permanently mastered
+                mark_card_mastered(card)
+            else:
+                feedback = f"{base_feedback} 🔄 Streak reset to 0/3"
 
             # Store the completed card with results
             completed_card = {
@@ -641,16 +738,23 @@ def flashcard():
                 'correct': correct,
                 'feedback': feedback,
                 'answer_type': card.get('answer_type', 'multiple_choice'),
-                'options': card.get('options', [])
+                'options': card.get('options', []),
+                'streak': current_streak,
+                'mastered': mastered
             }
             
             # Add to completed cards list
             session.setdefault('completed_cards', []).append(completed_card)
             
+            # Track how many cards have been mastered in this session
+            if mastered:
+                session['cards_mastered_this_session'] = session.get('cards_mastered_this_session', 0) + 1
+            
             # Check if this is the last card
             is_last_card = (current_card_index + 1 >= len(session['flashcards']))
             
-            if card['correct_count'] >= 3:
+            if current_streak >= 3:
+                # Remove card from session after mastering
                 session['flashcards'].pop(current_card_index)
             else:
                 session['current_card_index'] += 1
@@ -683,13 +787,19 @@ def flashcard():
         exam_remaining_seconds = None
         question_remaining_seconds = None
     
+    # Calculate mastery progress for study mode
+    cards_mastered_session = session.get('cards_mastered_this_session', 0) if mode == 'study' else 0
+    cards_remaining = len(session.get('flashcards', [])) if mode == 'study' else 0
+    
     return render_template('flashcard_scroll.html', 
                          cards=completed_cards,
                          current_card=card, 
                          mode=mode, 
                          time_limit=session.get('time_per_card'),
                          exam_remaining_seconds=exam_remaining_seconds,
-                         question_remaining_seconds=question_remaining_seconds)
+                         question_remaining_seconds=question_remaining_seconds,
+                         cards_mastered_session=cards_mastered_session,
+                         cards_remaining=cards_remaining)
 
 # Modify the results route
 @app.route('/results')
@@ -699,6 +809,48 @@ def results():
     
     mode = session.get('mode', 'study')
     timestamp = datetime.now()
+    
+    # Check if results have already been saved for this session to prevent duplicates
+    if session.get('results_saved', False):
+        # Results already saved, just display them
+        if mode == 'exam':
+            user_answers = session.get('user_answers', [])
+            score = 0
+            results = []
+            
+            for answer in user_answers:
+                correct = check_answer(answer['question'], answer['user_answer'], answer['correct_answer'])
+                results.append({
+                    'question': answer['question'],
+                    'user_answer': answer['user_answer'],
+                    'correct_answer': answer['correct_answer'],
+                    'is_correct': correct
+                })
+                if correct:
+                    score += 1
+                    
+            total_questions = len(user_answers)
+            percentage = calculate_percentage(score, total_questions)
+            
+            return render_template('results.html',
+                                 mode=mode,
+                                 total_questions=total_questions,
+                                 score=score,
+                                 percentage=percentage,
+                                 results=results)
+        else:
+            total_questions = session.get('current_card_index', 0)
+            score = session.get('score', 0)
+            percentage = calculate_percentage(score, total_questions)
+            
+            return render_template('results.html',
+                                 mode=mode,
+                                 total_questions=total_questions,
+                                 score=score,
+                                 percentage=percentage)
+    
+    # Save results for the first time
+    session['results_saved'] = True
     
     if mode == 'exam':
         user_answers = session.get('user_answers', [])
@@ -738,12 +890,14 @@ def results():
         total_questions = session.get('current_card_index', 0)
         score = session.get('score', 0)
         percentage = calculate_percentage(score, total_questions)
+        cards_mastered = session.get('cards_mastered_this_session', 0)
         
         study_history[timestamp] = {
             'score': score,
             'total': total_questions,
             'percentage': percentage,
-            'topics': session.get('topics', [])
+            'topics': session.get('topics', []),
+            'cards_mastered': cards_mastered
         }
         
         save_history()  # Save history after study session
@@ -752,7 +906,8 @@ def results():
                              mode=mode,
                              total_questions=total_questions,
                              score=score,
-                             percentage=percentage)
+                             percentage=percentage,
+                             cards_mastered=cards_mastered)
 
 @app.route('/stats')
 def stats():
@@ -761,10 +916,25 @@ def stats():
                          study_history=study_history,
                          all_time_scores=all_time_scores)
 
+@app.route('/mastery')
+def mastery():
+    """Show mastery progress for all topics"""
+    mastery_stats = get_mastery_stats()
+    return render_template('mastery.html', 
+                         mastery_stats=mastery_stats)
+
+@app.route('/reset_mastery/<topic>', methods=['POST'])
+def reset_mastery(topic):
+    """Reset mastered cards for a specific topic"""
+    reset_topic_mastery(topic)
+    flash(f'Mastery progress reset for "{topic}"', 'success')
+    return redirect(url_for('mastery'))
+
 # Update the route decorator to match the name used in templates
 @app.route('/exit', methods=['POST'])
 def exit():  # Changed from exit_session to exit
-    if 'mode' in session:
+    # Only save if we're in a session and results haven't already been saved
+    if 'mode' in session and not session.get('results_saved', False):
         mode = session['mode']
         score = session.get('score', 0)
         total = session.get('current_card_index', 0)

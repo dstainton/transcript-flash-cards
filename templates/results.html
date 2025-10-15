@@ -15,6 +15,13 @@
             <h3>Percentage</h3>
             <p class="large-text">{{ "%.1f"|format(percentage) }}%</p>
         </div>
+        {% if mode == 'study' and cards_mastered is defined and cards_mastered > 0 %}
+        <div class="stat-box mastery-stat">
+            <h3>Cards Mastered</h3>
+            <p class="large-text">🎉 {{ cards_mastered }}</p>
+            <p class="mastery-note">Mastered cards won't appear in future sessions</p>
+        </div>
+        {% endif %}
     </div>
 
     {% if mode == 'exam' and results %}
@@ -33,7 +40,7 @@
     {% endif %}
 
     <div class="button-group">
-        <a href="{{ url_for('start') }}" class="button">New Session</a>
+        <a href="{{ url_for('start') }}" class="button" title="Start a new study or exam session">Start New Session</a>
         <a href="{{ url_for('stats') }}" class="button button-secondary">View Statistics</a>
         <a href="{{ url_for('index') }}" class="button button-tertiary">Home</a>
     </div>

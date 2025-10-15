@@ -33,6 +33,12 @@
                     <h3>Question {{ cards|length + 1 }}</h3>
                     <div class="progress-indicator">
                         <span class="current">{{ cards|length + 1 }}</span> / <span class="total">{{ session.get('total_cards', '?') }}</span>
+                        {% if cards_mastered_session > 0 %}
+                        <span class="mastery-badge">🎉 {{ cards_mastered_session }} mastered</span>
+                        {% endif %}
+                        {% if cards_remaining > 0 %}
+                        <span class="remaining-badge">{{ cards_remaining }} remaining</span>
+                        {% endif %}
                     </div>
                 {% endif %}
             </div>
