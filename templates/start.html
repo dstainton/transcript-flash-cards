@@ -223,5 +223,15 @@ window.addEventListener('load', function() {
         });
     }
 });
+
+// Handle project selector change - reload page to show new project's topics
+document.getElementById('project-selector').addEventListener('change', function() {
+    // Create a form to submit the project change
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/switch-project/' + this.value;
+    document.body.appendChild(form);
+    form.submit();
+});
 </script>
 {% endblock %}
