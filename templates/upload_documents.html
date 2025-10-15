@@ -458,14 +458,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     showMessage('⚠️ Some files had issues: ' + data.errors.join(', '), 'warning');
                 }
                 
-                // Show redirect message
-                progressText.textContent = 'Redirecting to project setup...';
+                // Show AI analysis message
+                progressText.textContent = 'Analyzing content with AI...';
                 uploadProgress.style.display = 'block';
+                
+                // Animate the progress text while waiting
+                let aiDots = 0;
+                const aiInterval = setInterval(() => {
+                    aiDots = (aiDots + 1) % 4;
+                    progressText.textContent = 'Analyzing content with AI' + '.'.repeat(aiDots);
+                }, 500);
                 
                 // Redirect to project creation page after a short delay
                 setTimeout(() => {
+                    clearInterval(aiInterval);
                     window.location.href = '/create-project-from-documents';
-                }, 1500);
+                }, 2000);
             } else {
                 fileList.style.display = 'block';
                 showMessage('❌ Error: ' + data.error, 'error');
