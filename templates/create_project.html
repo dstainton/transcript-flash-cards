@@ -267,11 +267,11 @@
     <div class="loading-content">
         <div class="loading-spinner"></div>
         <h2>Creating Your Project...</h2>
-        <p>Generating flashcards with AI. This may take 1-2 minutes.</p>
+        <p>AI is generating flashcards. This may take 1-2 minutes.</p>
         <div class="loading-steps">
-            <div class="step active">📝 Analyzing content</div>
-            <div class="step">🎯 Generating flashcards</div>
-            <div class="step">💾 Saving project</div>
+            <div class="step active">📝 Extracting topics</div>
+            <div class="step">🎯 Generating flashcards (this takes the longest)</div>
+            <div class="step">✅ Finalizing</div>
         </div>
     </div>
 </div>
@@ -353,19 +353,20 @@ document.querySelector('.create-project-form').addEventListener('submit', functi
     // Show loading overlay
     document.getElementById('loadingOverlay').style.display = 'flex';
     
-    // Animate through steps
-    let stepIndex = 0;
+    // Animate through steps with realistic timing
     const steps = document.querySelectorAll('.step');
-    const stepInterval = setInterval(() => {
-        if (stepIndex < steps.length) {
-            steps.forEach(s => s.classList.remove('active'));
-            steps[stepIndex].classList.add('active');
-            stepIndex++;
-        }
-    }, 2000); // Change step every 2 seconds
     
-    // Clear interval when form actually submits
-    setTimeout(() => clearInterval(stepInterval), 10000);
+    // Start with step 1 active
+    steps[0].classList.add('active');
+    
+    // Move to step 2 after 5 seconds (topics extracted)
+    setTimeout(() => {
+        steps[0].classList.remove('active');
+        steps[1].classList.add('active');
+    }, 5000);
+    
+    // Step 2 stays active for the flashcard generation
+    // Step 3 will show briefly when page redirects (if needed)
 });
 </script>
 {% endblock %}

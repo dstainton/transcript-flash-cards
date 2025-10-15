@@ -28,13 +28,14 @@
             <h3>Selected Files</h3>
             <div id="fileItems" class="file-items"></div>
             <div class="upload-actions">
-                <button type="button" id="uploadBtn" class="button button-primary">
+                <button type="button" id="uploadBtn" class="button button-primary pulse-button">
                     🚀 Process Documents
                 </button>
                 <button type="button" id="clearBtn" class="button button-secondary">
                     Clear All
                 </button>
             </div>
+            <p class="upload-hint">👆 Click "Process Documents" to extract text and continue</p>
         </div>
         
         <!-- Progress -->
@@ -251,6 +252,43 @@
     background: #fff3cd;
     border: 1px solid #ffeaa7;
     color: #856404;
+}
+
+.upload-hint {
+    text-align: center;
+    margin-top: 1rem;
+    color: #4a90e2;
+    font-weight: 600;
+    font-size: 0.95rem;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.pulse-button {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
+    }
+}
+
+.pulse-button:hover {
+    animation: none;
 }
 </style>
 
