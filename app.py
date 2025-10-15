@@ -9,6 +9,8 @@ import subprocess
 import sys
 import secrets
 from collections import defaultdict
+from project_manager import ProjectManager, Project
+from migrate_to_projects import migrate
 
 def install_and_import(package):
     try:
@@ -74,10 +76,46 @@ with open('openaikey.txt', 'r') as file:
 # Create OpenAI client
 client = openai.OpenAI(api_key=api_key)
 
+# Run migration if needed (converts old single-project structure to multi-project)
+print("\nChecking if migration is needed...")
+migrate()
+
+# Initialize Project Manager
+print("Initializing Project Manager...")
+project_manager = ProjectManager()
+print(f"✓ Found {len(project_manager.projects)} project(s)\n")
+
 # Configurable parameters
 CARDS_PER_TRANSCRIPT = 25  # Default number of cards per transcript
 TIME_PER_CARD = 10  # Default time per card in seconds
 TOTAL_EXAM_TIME = 60  # Default total exam time in minutes
+
+# Helper functions for project management
+def get_current_project() -> Project:
+    """Get the current project from session, or return default project"""
+    project_id = session.get('current_project_id')
+    
+    if project_id and project_id in project_manager.projects:
+        return project_manager.projects[project_id]
+    
+    # No project in session or project not found - use first available or create default
+    if project_manager.projects:
+        # Use first available project
+        first_project_id = list(project_manager.projects.keys())[0]
+        session['current_project_id'] = first_project_id
+        return project_manager.projects[first_project_id]
+    else:
+        # No projects exist - create a default one
+        default_project = project_manager.create_project("My Flash Cards")
+        session['current_project_id'] = default_project.id
+        return default_project
+
+def set_current_project(project_id: str):
+    """Set the current project in session"""
+    if project_id in project_manager.projects:
+        session['current_project_id'] = project_id
+        return True
+    return False
 
 def save_flashcards(flashcards, filepath='flashcards.json'):
     """Save flashcards to a JSON file"""
@@ -273,133 +311,52 @@ def generate_flashcards(transcript, filename, main_topic=None):
         print(f"  Error generating flashcards: {e}")
         return []
 
-# Load flashcards at startup
-flashcards = load_transcripts('transcripts')  # Ensure transcripts are in 'transcripts' folder
-
-print(f"\n***** FLASHCARDS LOADED: {len(flashcards)} total flashcards *****\n")
-
-# Shuffle flashcards
-random.shuffle(flashcards)
-
-# Initialize scores
-all_time_scores = {}
-exam_history = {}
-study_history = {}
-
-# Add persistent storage for history
-def save_history():
-    """Save history to JSON file with datetime objects converted to ISO format strings"""
-    history = {
-        'exam_history': {
-            k.isoformat(): v for k, v in exam_history.items()
-        },
-        'study_history': {
-            k.isoformat(): v for k, v in study_history.items()
-        },
-        'all_time_scores': all_time_scores
-    }
-    with open('history.json', 'w') as f:
-        json.dump(history, f)
-
-def load_history():
-    """Load history from JSON file and convert ISO format strings back to datetime objects"""
-    global exam_history, study_history, all_time_scores
-    try:
-        if os.path.exists('history.json'):
-            with open('history.json', 'r') as f:
-                history = json.load(f)
-                # Convert string dates back to datetime objects
-                exam_history = {
-                    datetime.fromisoformat(k): v 
-                    for k, v in history['exam_history'].items()
-                }
-                study_history = {
-                    datetime.fromisoformat(k): v 
-                    for k, v in history['study_history'].items()
-                }
-                all_time_scores = history['all_time_scores']
-    except Exception as e:
-        print(f"Error loading history: {e}")
-
-# Add cleanup of old history entries
-def cleanup_old_history(days=30):
-    global exam_history, study_history
-    cutoff = datetime.now() - timedelta(days=days)
-    exam_history = {k: v for k, v in exam_history.items() 
-                   if isinstance(k, datetime) and k > cutoff}
-    study_history = {k: v for k, v in study_history.items() 
-                   if isinstance(k, datetime) and k > cutoff}
-
-# Load history at startup
-load_history()
-
-# Persistent storage for mastered cards
-mastered_cards = {}  # Structure: {question_hash: {'question': str, 'topic': str, 'mastered_date': str}}
-
+# Project-aware helper functions for mastery
 def get_card_hash(question):
     """Generate a unique hash for a flashcard question"""
     import hashlib
     return hashlib.md5(question.encode('utf-8')).hexdigest()
 
-def save_mastery():
-    """Save mastered cards to JSON file"""
-    try:
-        with open('mastery.json', 'w', encoding='utf-8') as f:
-            json.dump(mastered_cards, f, indent=2)
-    except Exception as e:
-        print(f"Error saving mastery data: {e}")
-
-def load_mastery():
-    """Load mastered cards from JSON file"""
-    global mastered_cards
-    try:
-        if os.path.exists('mastery.json'):
-            with open('mastery.json', 'r', encoding='utf-8') as f:
-                mastered_cards = json.load(f)
-    except Exception as e:
-        print(f"Error loading mastery data: {e}")
-        mastered_cards = {}
-
 def mark_card_mastered(card):
-    """Mark a card as mastered"""
+    """Mark a card as mastered in current project"""
+    project = get_current_project()
     card_hash = get_card_hash(card['question'])
-    mastered_cards[card_hash] = {
+    project.mastery[card_hash] = {
         'question': card['question'],
         'topic': card['topic'],
         'filename': card.get('filename', 'Unknown'),
         'mastered_date': datetime.now().isoformat()
     }
-    save_mastery()
+    project.save_mastery()
 
 def is_card_mastered(card):
-    """Check if a card is mastered"""
+    """Check if a card is mastered in current project"""
+    project = get_current_project()
     card_hash = get_card_hash(card['question'])
-    return card_hash in mastered_cards
+    return card_hash in project.mastery
 
 def reset_topic_mastery(topic):
-    """Reset all mastered cards for a specific topic"""
-    global mastered_cards
-    mastered_cards = {
-        k: v for k, v in mastered_cards.items() 
+    """Reset all mastered cards for a specific topic in current project"""
+    project = get_current_project()
+    project.mastery = {
+        k: v for k, v in project.mastery.items() 
         if v['topic'] != topic
     }
-    save_mastery()
+    project.save_mastery()
 
 def get_mastery_stats():
-    """Get mastery statistics by topic"""
+    """Get mastery statistics by topic for current project"""
+    project = get_current_project()
     stats = defaultdict(lambda: {'mastered': 0, 'total': 0})
     
     # Count total cards per topic
-    for card in flashcards:
+    for card in project.flashcards:
         topic = card['topic']
         stats[topic]['total'] += 1
         if is_card_mastered(card):
             stats[topic]['mastered'] += 1
     
     return dict(stats)
-
-# Load mastery data at startup
-load_mastery()
 
 # Routes
 
@@ -426,7 +383,6 @@ def test():
 def start():
     if request.method == 'POST':
         print(f"\n===== START ROUTE POST REQUEST =====")
-        print(f"Flashcards available globally: {len(flashcards)}")
         
         if not request.form.getlist('topics'):
             flash('Please select at least one topic', 'error')
@@ -481,15 +437,20 @@ def start():
             session['question_start_time'] = datetime.now().isoformat()
             session['question_duration_seconds'] = session['time_per_card']  # Time per question in seconds
         
+        # Get current project and load its flashcards
+        project = get_current_project()
+        project.load_flashcards()
+        project.load_mastery()
+        
         # Filter flashcards by selected topics if any are selected
         print(f"Selected topics: {selected_topics}")
-        print(f"Total flashcards available: {len(flashcards)}")
+        print(f"Total flashcards available: {len(project.flashcards)}")
         
         if 'all' in selected_topics:
-            session['flashcards'] = flashcards.copy()  # Use all flashcards
+            session['flashcards'] = project.flashcards.copy()  # Use all flashcards
             print(f"Using all flashcards: {len(session['flashcards'])}")
         else:
-            session['flashcards'] = [card for card in flashcards if card['topic'] in selected_topics]
+            session['flashcards'] = [card for card in project.flashcards if card['topic'] in selected_topics]
             print(f"Filtered flashcards: {len(session['flashcards'])}")
         
         # In study mode, filter out already mastered cards
@@ -505,16 +466,17 @@ def start():
         print(f"Total cards set to: {session['total_cards']}")
         
         # Debug: Show first few topics from flashcards
-        if flashcards:
-            sample_topics = list(set(card['topic'] for card in flashcards[:10]))
+        if project.flashcards:
+            sample_topics = list(set(card['topic'] for card in project.flashcards[:10]))
             print(f"Sample topics from flashcards: {sample_topics}")
             
         if not session['flashcards']:  # If no flashcards match the selected topics
             print("ERROR: No flashcards found - redirecting back to start")
             print(f"Selected topics were: {selected_topics}")
-            print(f"Total flashcards globally: {len(flashcards)}")
+            print(f"Total flashcards in project: {len(project.flashcards)}")
             return render_template('start.html', 
-                                topics=sorted(set(card['topic'] for card in flashcards)),
+                                topics=sorted(set(card['topic'] for card in project.flashcards)),
+                                mastery_stats=get_mastery_stats(),
                                 error="No flashcards found for selected topics")
             
         random.shuffle(session['flashcards'])
@@ -532,8 +494,13 @@ def start():
         
         return redirect(url_for('flashcard'))
     else:
-        # Get unique topics from flashcards with mastery stats
-        topics = sorted(set(card['topic'] for card in flashcards))
+        # Get current project and load its data
+        project = get_current_project()
+        project.load_flashcards()
+        project.load_mastery()
+        
+        # Get unique topics from project flashcards with mastery stats
+        topics = sorted(set(card['topic'] for card in project.flashcards)) if project.flashcards else []
         mastery_stats = get_mastery_stats()
         return render_template('start.html', 
                              topics=topics,
@@ -871,14 +838,15 @@ def results():
         total_questions = len(user_answers)
         percentage = calculate_percentage(score, total_questions)
         
-        exam_history[timestamp] = {
+        # Save to project history
+        project = get_current_project()
+        project.history['exam_history'][timestamp] = {
             'score': score,
             'total': total_questions,
             'percentage': percentage,
             'topics': session.get('topics', [])
         }
-        
-        save_history()  # Save history after exam
+        project.save_history()
         
         return render_template('results.html',
                              mode=mode,
@@ -892,15 +860,16 @@ def results():
         percentage = calculate_percentage(score, total_questions)
         cards_mastered = session.get('cards_mastered_this_session', 0)
         
-        study_history[timestamp] = {
+        # Save to project history
+        project = get_current_project()
+        project.history['study_history'][timestamp] = {
             'score': score,
             'total': total_questions,
             'percentage': percentage,
             'topics': session.get('topics', []),
             'cards_mastered': cards_mastered
         }
-        
-        save_history()  # Save history after study session
+        project.save_history()
         
         return render_template('results.html',
                              mode=mode,
@@ -911,10 +880,12 @@ def results():
 
 @app.route('/stats')
 def stats():
+    project = get_current_project()
+    project.load_history()
     return render_template('stats.html', 
-                         exam_history=exam_history,
-                         study_history=study_history,
-                         all_time_scores=all_time_scores)
+                         exam_history=project.history.get('exam_history', {}),
+                         study_history=project.history.get('study_history', {}),
+                         all_time_scores=project.history.get('all_time_scores', {}))
 
 @app.route('/mastery')
 def mastery():
@@ -942,22 +913,23 @@ def exit():  # Changed from exit_session to exit
         
         percentage = calculate_percentage(score, total)
         
+        # Save to project history
+        project = get_current_project()
         if mode == 'exam':
-            exam_history[timestamp] = {
+            project.history['exam_history'][timestamp] = {
                 'score': score,
                 'total': total,
                 'percentage': percentage,
                 'topics': session.get('topics', [])
             }
         else:
-            study_history[timestamp] = {
+            project.history['study_history'][timestamp] = {
                 'score': score,
                 'total': total,
                 'percentage': percentage,
                 'topics': session.get('topics', [])
             }
-            
-        save_history()  # Save history on exit
+        project.save_history()
             
     session.clear()
     return redirect(url_for('index'))
@@ -1018,13 +990,5 @@ def calculate_percentage(score, total):
     except ZeroDivisionError:
         return 0
 
-# Add at start of app
-def init_app():
-    global flashcards, exam_history, study_history, all_time_scores
-    load_history()
-    flashcards = load_transcripts('transcripts')
-    random.shuffle(flashcards)
-
 if __name__ == '__main__':
-    init_app()
     app.run(debug=True)
