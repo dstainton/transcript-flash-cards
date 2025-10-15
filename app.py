@@ -85,7 +85,7 @@ migrate()
 # Initialize Project Manager
 print("Initializing Project Manager...")
 project_manager = ProjectManager()
-print(f"✓ Found {len(project_manager.projects)} project(s)\n")
+print(f"[OK] Found {len(project_manager.projects)} project(s)\n")
 
 # Configurable parameters
 CARDS_PER_TRANSCRIPT = 25  # Default number of cards per transcript
