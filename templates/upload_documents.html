@@ -28,7 +28,7 @@
             <h3>Selected Files</h3>
             <div id="fileItems" class="file-items"></div>
             <div class="upload-actions">
-                <button type="button" id="uploadBtn" class="button button-primary pulse-button">
+                <button type="button" id="uploadBtn" class="button button-primary">
                     🚀 Process Documents
                 </button>
                 <button type="button" id="clearBtn" class="button button-secondary">
@@ -272,23 +272,6 @@
         opacity: 1;
         transform: translateY(0);
     }
-}
-
-.pulse-button {
-    animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-    0%, 100% {
-        box-shadow: 0 0 0 0 rgba(74, 144, 226, 0.7);
-    }
-    50% {
-        box-shadow: 0 0 0 10px rgba(74, 144, 226, 0);
-    }
-}
-
-.pulse-button:hover {
-    animation: none;
 }
 </style>
 
