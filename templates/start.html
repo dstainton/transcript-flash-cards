@@ -8,7 +8,7 @@
     
     <form method="POST" class="setup-form">
         <div class="form-section project-selector-section">
-            <h2>📁 Current Project</h2>
+            <h2>Current Project</h2>
             <select name="project_id" id="project-selector" class="project-dropdown">
                 {% for proj in available_projects %}
                 <option value="{{ proj.id }}" {% if proj.id == current_project.id %}selected{% endif %}>
