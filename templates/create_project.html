@@ -267,11 +267,17 @@
     <div class="loading-content">
         <div class="loading-spinner"></div>
         <h2>Creating Your Project...</h2>
-        <p>AI is generating flashcards. This may take 1-2 minutes.</p>
+        <p id="loadingPhase">AI is generating flashcards. This may take 1-2 minutes.</p>
         <div class="loading-steps">
             <div class="step active">📝 Extracting topics</div>
             <div class="step">🎯 Generating flashcards (this takes the longest)</div>
             <div class="step">✅ Finalizing</div>
+        </div>
+        
+        <!-- Topic generation progress -->
+        <div id="topicProgress" style="display: none;">
+            <h3 style="margin: 1.5rem 0 1rem 0; color: #2c3e50; font-size: 1.1rem;">Generating Flashcards:</h3>
+            <div id="topicList"></div>
         </div>
     </div>
 </div>
@@ -346,6 +352,37 @@
     color: white;
     font-weight: 600;
 }
+
+#topicList {
+    text-align: left;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.topic-item {
+    padding: 0.5rem 1rem;
+    margin: 0.3rem 0;
+    background: #f8f9fa;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.topic-item.generating {
+    background: #fff3cd;
+    border-left: 3px solid #ffc107;
+}
+
+.topic-item.completed {
+    background: #d4edda;
+    border-left: 3px solid #28a745;
+}
+
+.topic-item-icon {
+    font-size: 1.2rem;
+}
 </style>
 
 <script>
@@ -363,11 +400,52 @@ document.querySelector('.create-project-form').addEventListener('submit', functi
     setTimeout(() => {
         steps[0].classList.remove('active');
         steps[1].classList.add('active');
+        
+        // Show topic progress
+        showTopicProgress();
     }, 5000);
     
     // Step 2 stays active for the flashcard generation
     // Step 3 will show briefly when page redirects (if needed)
 });
+
+function showTopicProgress() {
+    const topicProgress = document.getElementById('topicProgress');
+    const topicList = document.getElementById('topicList');
+    
+    // Get topics from the preview
+    const topicCards = document.querySelectorAll('.topic-card');
+    const topics = [];
+    topicCards.forEach(card => {
+        const name = card.querySelector('.topic-name').textContent;
+        const count = card.querySelector('.topic-cards-count').textContent;
+        topics.push({ name, count });
+    });
+    
+    if (topics.length > 0) {
+        topicProgress.style.display = 'block';
+        
+        // Add all topics to list
+        topics.forEach((topic, index) => {
+            const item = document.createElement('div');
+            item.className = 'topic-item';
+            item.innerHTML = `<span class="topic-item-icon">⏳</span> <span>${topic.name} (${topic.count})</span>`;
+            topicList.appendChild(item);
+            
+            // Simulate progress by marking as generating/completed over time
+            setTimeout(() => {
+                item.classList.add('generating');
+                item.querySelector('.topic-item-icon').textContent = '⚙️';
+            }, index * 2000);
+            
+            setTimeout(() => {
+                item.classList.remove('generating');
+                item.classList.add('completed');
+                item.querySelector('.topic-item-icon').textContent = '✅';
+            }, (index + 1) * 8000); // Assume 8 seconds per topic
+        });
+    }
+}
 </script>
 {% endblock %}
 

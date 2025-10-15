@@ -398,7 +398,10 @@ def extract_topics_from_text(text):
 def generate_flashcards_from_text(text, topic_name, num_cards):
     """Generate flashcards for a specific topic from document text"""
     prompt = f"""
-    Generate exactly {num_cards} flashcards about "{topic_name}" from the following content.
+    Generate EXACTLY {num_cards} flashcards (no more, no less) about "{topic_name}" from the following content.
+    
+    IMPORTANT: The JSON array MUST contain precisely {num_cards} flashcard objects.
+    
     The response must be a valid JSON array containing flashcard objects.
     Each flashcard object must have these exact keys: 'question', 'answer', and optionally 'options'.
     Format the response as a JSON array without any additional text or explanation.
@@ -851,7 +854,7 @@ def flashcard():
             # Track streak for this specific card
             card_hash = get_card_hash(card['question'])
             current_streak = session.get(f'streak_{card_hash}', 0)
-            
+
             if correct:
                 session['score'] += 1
                 current_streak += 1
@@ -957,25 +960,25 @@ def results():
     # Check if results have already been saved for this session to prevent duplicates
     if session.get('results_saved', False):
         # Results already saved, just display them
-        if mode == 'exam':
-            user_answers = session.get('user_answers', [])
-            score = 0
-            results = []
-            
-            for answer in user_answers:
-                correct = check_answer(answer['question'], answer['user_answer'], answer['correct_answer'])
-                results.append({
-                    'question': answer['question'],
-                    'user_answer': answer['user_answer'],
-                    'correct_answer': answer['correct_answer'],
-                    'is_correct': correct
-                })
-                if correct:
-                    score += 1
-                    
-            total_questions = len(user_answers)
-            percentage = calculate_percentage(score, total_questions)
-            
+    if mode == 'exam':
+        user_answers = session.get('user_answers', [])
+        score = 0
+        results = []
+        
+        for answer in user_answers:
+            correct = check_answer(answer['question'], answer['user_answer'], answer['correct_answer'])
+            results.append({
+                'question': answer['question'],
+                'user_answer': answer['user_answer'],
+                'correct_answer': answer['correct_answer'],
+                'is_correct': correct
+            })
+            if correct:
+                score += 1
+                
+        total_questions = len(user_answers)
+        percentage = calculate_percentage(score, total_questions)
+        
             return render_template('results.html',
                                  mode=mode,
                                  total_questions=total_questions,
@@ -1246,6 +1249,14 @@ def create_project_from_documents():
             if not project_name:
                 # Use AI to generate project name
                 project_name = generate_project_name_from_text(pending['extracted_text'])
+            
+            # Check for duplicate names and append number if needed
+            original_name = project_name
+            existing_names = [p.name for p in project_manager.projects.values()]
+            counter = 1
+            while project_name in existing_names:
+                counter += 1
+                project_name = f"{original_name} ({counter})"
             
             # Extract topics using AI
             topics = extract_topics_from_text(pending['extracted_text'])
