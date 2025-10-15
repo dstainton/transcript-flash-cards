@@ -1039,17 +1039,7 @@ footer {
 
 /* Project Selector */
 .project-selector-section {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border: 2px solid #dee2e6;
-    border-radius: 12px;
-    padding: 20px;
     margin-bottom: 20px;
-}
-
-.project-selector-section h2 {
-    margin: 0 0 15px 0;
-    color: #2c3e50;
-    font-size: 1.2rem;
 }
 
 .project-dropdown {
