@@ -1102,10 +1102,7 @@ def manage_projects():
 @app.route('/switch-project/<project_id>', methods=['POST'])
 def switch_project(project_id):
     """Switch to a different project"""
-    if set_current_project(project_id):
-        project = project_manager.projects[project_id]
-        flash(f'Switched to project: {project.name}', 'success')
-    else:
+    if not set_current_project(project_id):
         flash('Project not found', 'error')
     return redirect(url_for('start'))
 
