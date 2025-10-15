@@ -7,6 +7,27 @@
     <h1>Setup Your Session</h1>
     
     <form method="POST" class="setup-form">
+        <div class="form-section project-selector-section">
+            <h2>📁 Current Project</h2>
+            <div class="project-selector-container">
+                <select name="project_id" id="project-selector" class="project-dropdown">
+                    {% for proj in available_projects %}
+                    <option value="{{ proj.id }}" {% if proj.id == current_project.id %}selected{% endif %}>
+                        {{ proj.name }} 
+                        {% if proj.stats.total_flashcards > 0 %}
+                        ({{ proj.stats.total_flashcards }} cards, {{ "%.0f"|format(proj.stats.mastery_percentage) }}% mastered)
+                        {% else %}
+                        (empty)
+                        {% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <a href="{{ url_for('manage_projects') }}" class="btn-manage-projects" title="Manage your projects">
+                    ⚙️ Manage
+                </a>
+            </div>
+        </div>
+
         <div class="form-section">
             <h2>Study Mode</h2>
             <div class="radio-group mode-selector">

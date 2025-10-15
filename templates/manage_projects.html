@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Projects{% endblock %}
+
+{% block content %}
+<div class="stats-container">
+    <div class="card stats-card">
+        <h1>📁 Manage Projects</h1>
+        <p class="page-description">View and manage your flashcard projects</p>
+        
+        {% if projects %}
+        <div class="projects-grid">
+            {% for project in projects %}
+            <div class="project-item-card {% if project.id == current_project_id %}current-project{% endif %}">
+                <div class="project-header">
+                    <h3>{{ project.name }}</h3>
+                    {% if project.id == current_project_id %}
+                    <span class="current-badge">✓ Current</span>
+                    {% endif %}
+                </div>
+                
+                <div class="project-stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-icon">📚</div>
+                        <div class="stat-details">
+                            <div class="stat-value">{{ project.stats.total_flashcards }}</div>
+                            <div class="stat-label">Flashcards</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <div class="stat-icon">🎯</div>
+                        <div class="stat-details">
+                            <div class="stat-value">{{ "%.0f"|format(project.stats.mastery_percentage) }}%</div>
+                            <div class="stat-label">Mastered</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <div class="stat-icon">📝</div>
+                        <div class="stat-details">
+                            <div class="stat-value">{{ project.stats.topics|length }}</div>
+                            <div class="stat-label">Topics</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <div class="stat-icon">🎓</div>
+                        <div class="stat-details">
+                            <div class="stat-value">{{ project.stats.total_study_sessions + project.stats.total_exam_sessions }}</div>
+                            <div class="stat-label">Sessions</div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if project.stats.topics %}
+                <div class="project-topics">
+                    <strong>Topics:</strong> {{ project.stats.topics|join(', ') if project.stats.topics|length <= 5 else (project.stats.topics[:5]|join(', ') + ' +' + (project.stats.topics|length - 5)|string + ' more') }}
+                </div>
+                {% endif %}
+                
+                <div class="project-actions">
+                    {% if project.id != current_project_id %}
+                    <form method="POST" action="{{ url_for('switch_project', project_id=project.id) }}" style="display: inline;">
+                        <button type="submit" class="btn-small btn-primary">
+                            Switch to This Project
+                        </button>
+                    </form>
+                    {% endif %}
+                    
+                    <form method="POST" action="{{ url_for('delete_project', project_id=project.id) }}" 
+                          style="display: inline;"
+                          onsubmit="return confirm('Are you sure you want to delete project \'{{ project.name }}\'? This will permanently delete all flashcards, progress, and statistics for this project. This action cannot be undone!');">
+                        <button type="submit" class="btn-small btn-danger">
+                            🗑️ Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="no-data">No projects found. Start by creating a new session!</p>
+        {% endif %}
+        
+        <div class="button-group">
+            <a href="{{ url_for('start') }}" class="button">← Back to Setup</a>
+            <a href="{{ url_for('index') }}" class="button button-secondary">Home</a>
+        </div>
+    </div>
+</div>
+
+<style>
+.page-description {
+    text-align: center;
+    color: #666;
+    margin: -10px 0 30px 0;
+}
+
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.project-item-card {
+    background: white;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.project-item-card:hover {
+    border-color: #4a90e2;
+    box-shadow: 0 4px 12px rgba(74, 144, 226, 0.15);
+    transform: translateY(-2px);
+}
+
+.project-item-card.current-project {
+    border-color: #4a90e2;
+    background: linear-gradient(135deg, #f0f7ff 0%, #e6f2ff 100%);
+}
+
+.project-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.project-header h3 {
+    margin: 0;
+    color: #2c3e50;
+    font-size: 1.3rem;
+}
+
+.current-badge {
+    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.project-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stat-icon {
+    font-size: 1.8rem;
+}
+
+.stat-details {
+    flex: 1;
+}
+
+.stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #2c3e50;
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: #666;
+    margin-top: 2px;
+}
+
+.project-topics {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.project-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-small {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 600;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #357abd 0%, #2868a8 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(74, 144, 226, 0.3);
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(231, 76, 60, 0.3);
+}
+
+@media (max-width: 768px) {
+    .projects-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .project-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    
+    .stat-value {
+        font-size: 1.2rem;
+    }
+    
+    .stat-icon {
+        font-size: 1.5rem;
+    }
+}
+</style>
+{% endblock %}
+

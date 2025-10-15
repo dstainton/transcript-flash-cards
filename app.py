@@ -384,6 +384,13 @@ def start():
     if request.method == 'POST':
         print(f"\n===== START ROUTE POST REQUEST =====")
         
+        # Handle project selection if changed
+        if 'project_id' in request.form:
+            new_project_id = request.form.get('project_id')
+            if new_project_id != session.get('current_project_id'):
+                set_current_project(new_project_id)
+                print(f"Switched to project: {new_project_id}")
+        
         if not request.form.getlist('topics'):
             flash('Please select at least one topic', 'error')
             return redirect(url_for('start'))
@@ -499,12 +506,27 @@ def start():
         project.load_flashcards()
         project.load_mastery()
         
-        # Get unique topics from project flashcards with mastery stats
+        # Get all projects with their stats for the selector
+        available_projects = []
+        for proj_id, proj in project_manager.projects.items():
+            proj.load_flashcards()
+            proj.load_mastery()
+            available_projects.append({
+                'id': proj.id,
+                'name': proj.name,
+                'stats': proj.get_stats()
+            })
+        available_projects = sorted(available_projects, key=lambda x: x['name'])
+        
+        # Get unique topics from current project flashcards with mastery stats
         topics = sorted(set(card['topic'] for card in project.flashcards)) if project.flashcards else []
         mastery_stats = get_mastery_stats()
+        
         return render_template('start.html', 
                              topics=topics,
                              mastery_stats=mastery_stats,
+                             current_project=project,
+                             available_projects=available_projects,
                              time_per_card=TIME_PER_CARD,
                              total_exam_time=TOTAL_EXAM_TIME)
 
@@ -900,6 +922,62 @@ def reset_mastery(topic):
     reset_topic_mastery(topic)
     flash(f'Mastery progress reset for "{topic}"', 'success')
     return redirect(url_for('mastery'))
+
+@app.route('/manage-projects')
+def manage_projects():
+    """Show project management page"""
+    projects = []
+    for proj_id, proj in project_manager.projects.items():
+        proj.load_flashcards()
+        proj.load_mastery()
+        proj.load_history()
+        projects.append({
+            'id': proj.id,
+            'name': proj.name,
+            'stats': proj.get_stats()
+        })
+    projects = sorted(projects, key=lambda x: x['name'])
+    
+    current_project_id = session.get('current_project_id')
+    
+    return render_template('manage_projects.html',
+                         projects=projects,
+                         current_project_id=current_project_id)
+
+@app.route('/switch-project/<project_id>', methods=['POST'])
+def switch_project(project_id):
+    """Switch to a different project"""
+    if set_current_project(project_id):
+        project = project_manager.projects[project_id]
+        flash(f'Switched to project: {project.name}', 'success')
+    else:
+        flash('Project not found', 'error')
+    return redirect(url_for('start'))
+
+@app.route('/delete-project/<project_id>', methods=['POST'])
+def delete_project(project_id):
+    """Delete a project"""
+    # Don't allow deleting the current project if it's the only one
+    if len(project_manager.projects) == 1:
+        flash('Cannot delete the only project', 'error')
+        return redirect(url_for('manage_projects'))
+    
+    # If deleting current project, switch to another one first
+    if project_id == session.get('current_project_id'):
+        # Find another project to switch to
+        for pid in project_manager.projects.keys():
+            if pid != project_id:
+                set_current_project(pid)
+                break
+    
+    # Delete the project
+    project_name = project_manager.projects[project_id].name if project_id in project_manager.projects else "Unknown"
+    if project_manager.delete_project(project_id):
+        flash(f'Project "{project_name}" deleted successfully', 'success')
+    else:
+        flash(f'Failed to delete project', 'error')
+    
+    return redirect(url_for('manage_projects'))
 
 # Update the route decorator to match the name used in templates
 @app.route('/exit', methods=['POST'])
