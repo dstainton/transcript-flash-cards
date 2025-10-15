@@ -152,10 +152,10 @@ class DocumentProcessor:
             try:
                 text = self.extract_text(file_path)
                 results[filename] = text
-                print(f"✓ Successfully processed: {filename}")
+                print(f"[OK] Successfully processed: {filename}")
             except Exception as e:
                 errors[filename] = str(e)
-                print(f"✗ Failed to process {filename}: {e}")
+                print(f"[ERROR] Failed to process {filename}: {e}")
         
         return results, errors
 
