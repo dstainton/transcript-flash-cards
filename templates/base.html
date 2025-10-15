@@ -11,8 +11,7 @@
         <div class="nav-content">
             <a href="{{ url_for('index') }}" class="nav-brand">Flash Cards</a>
             <div class="nav-links">
-                <a href="{{ url_for('mastery') }}">Mastery</a>
-                <a href="{{ url_for('stats') }}">Statistics</a>
+                <a href="{{ url_for('manage_projects') }}">Projects</a>
                 {% if 'mode' in session %}
                     <form method="POST" action="{{ url_for('exit') }}" class="inline-form">
                         <button type="submit" class="nav-link-button" title="Exit current session and save progress">Exit Session</button>

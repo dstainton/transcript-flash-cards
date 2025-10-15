@@ -1099,6 +1099,37 @@ footer {
     box-shadow: 0 4px 8px rgba(108, 117, 125, 0.3);
 }
 
+.project-quick-links {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.project-link {
+    flex: 1;
+    padding: 10px 16px;
+    background: white;
+    color: #4a90e2;
+    text-decoration: none;
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-align: center;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.project-link:hover {
+    background: #4a90e2;
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(74, 144, 226, 0.3);
+}
+
 /* Mode Selector */
 .mode-selector {
     display: grid;
@@ -1576,6 +1607,10 @@ footer {
     .btn-manage-projects {
         width: 100%;
         justify-content: center;
+    }
+    
+    .project-quick-links {
+        flex-direction: column;
     }
     
     .mode-selector {
