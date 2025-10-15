@@ -2,3 +2,9 @@ flask
 openai
 flask-session
 
+# Document processing libraries
+PyPDF2
+python-docx
+pdfplumber
+python-magic-bin
+
