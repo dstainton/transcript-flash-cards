@@ -134,7 +134,21 @@ secret_key.txt
 # Generated data files
 flashcards.json
 history.json
+mastery.json
 debug.log
+
+# Backup files from migration
+*.backup
 
 # Transcript files (raw content)
 transcripts/*.txt
+
+# Project-specific data (documents and generated files)
+projects/*/documents/
+projects/*/flashcards.json
+projects/*/mastery.json
+projects/*/history.json
+
+# Keep project metadata and folder structure
+!projects/*/project.json
+!projects/*/.gitkeep
