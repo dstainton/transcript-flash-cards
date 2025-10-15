@@ -32,9 +32,11 @@ try:
 except ImportError:
     subprocess.check_call([sys.executable, "-m", "pip", "install", "flask-session"])
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from flask_session import Session
+from werkzeug.utils import secure_filename
 import openai
+from document_processor import DocumentProcessor
 
 # Create Flask app and set secret key
 app = Flask(__name__)
@@ -978,6 +980,103 @@ def delete_project(project_id):
         flash(f'Failed to delete project', 'error')
     
     return redirect(url_for('manage_projects'))
+
+@app.route('/upload-documents', methods=['GET', 'POST'])
+def upload_documents():
+    """Handle document uploads for creating a new project"""
+    if request.method == 'POST':
+        # Check if files were uploaded
+        if 'documents' not in request.files:
+            return jsonify({'success': False, 'error': 'No files uploaded'}), 400
+        
+        files = request.files.getlist('documents')
+        if not files or all(f.filename == '' for f in files):
+            return jsonify({'success': False, 'error': 'No files selected'}), 400
+        
+        # Initialize document processor
+        processor = DocumentProcessor()
+        
+        # Create temporary directory for uploads
+        temp_dir = os.path.join(os.getcwd(), 'temp_uploads')
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        uploaded_files = []
+        errors = []
+        
+        try:
+            # Save uploaded files temporarily
+            for file in files:
+                if file.filename == '':
+                    continue
+                
+                filename = secure_filename(file.filename)
+                
+                # Check if file type is supported
+                if not processor.is_supported_file(filename):
+                    errors.append(f"{filename}: Unsupported file type")
+                    continue
+                
+                filepath = os.path.join(temp_dir, filename)
+                file.save(filepath)
+                uploaded_files.append(filepath)
+            
+            if not uploaded_files:
+                return jsonify({
+                    'success': False, 
+                    'error': 'No valid files uploaded',
+                    'errors': errors
+                }), 400
+            
+            # Extract text from documents
+            results, processing_errors = processor.process_multiple_documents(uploaded_files)
+            
+            if processing_errors:
+                errors.extend([f"{k}: {v}" for k, v in processing_errors.items()])
+            
+            if not results:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to extract text from any document',
+                    'errors': errors
+                }), 400
+            
+            # Combine all extracted text
+            combined_text = '\n\n'.join([
+                f"=== {filename} ===\n{text}" 
+                for filename, text in results.items()
+            ])
+            
+            # Store information in session for project creation
+            session['pending_project'] = {
+                'documents': uploaded_files,
+                'extracted_text': combined_text,
+                'document_count': len(results),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            return jsonify({
+                'success': True,
+                'message': f'Successfully processed {len(results)} document(s)',
+                'document_count': len(results),
+                'errors': errors if errors else None
+            })
+        
+        except Exception as e:
+            # Clean up temp files on error
+            for filepath in uploaded_files:
+                try:
+                    if os.path.exists(filepath):
+                        os.remove(filepath)
+                except:
+                    pass
+            
+            return jsonify({
+                'success': False,
+                'error': f'Upload failed: {str(e)}'
+            }), 500
+    
+    # GET request - show upload page
+    return render_template('upload_documents.html')
 
 # Update the route decorator to match the name used in templates
 @app.route('/exit', methods=['POST'])

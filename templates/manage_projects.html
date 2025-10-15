@@ -84,6 +84,9 @@
         {% endif %}
         
         <div class="button-group">
+            <a href="{{ url_for('upload_documents') }}" class="button button-success">
+                📁 Create Project from Documents
+            </a>
             <a href="{{ url_for('start') }}" class="button">← Back to Setup</a>
             <a href="{{ url_for('index') }}" class="button button-secondary">Home</a>
         </div>
@@ -227,6 +230,14 @@
     background: #c0392b;
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(231, 76, 60, 0.3);
+}
+
+.button-success {
+    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+}
+
+.button-success:hover {
+    background: linear-gradient(135deg, #229954 0%, #1e8449 100%);
 }
 
 @media (max-width: 768px) {

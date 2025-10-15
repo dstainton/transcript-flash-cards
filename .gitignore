@@ -145,3 +145,6 @@ transcripts/*.txt
 
 # Project-specific data - exclude entire projects directory
 projects/
+
+# Temporary upload directory
+temp_uploads/

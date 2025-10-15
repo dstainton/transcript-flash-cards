@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Documents{% endblock %}
+
+{% block content %}
+<div class="card upload-card">
+    <h1>Create New Project from Documents</h1>
+    <p class="upload-description">Upload your study materials to automatically generate flashcards</p>
+    
+    <div class="upload-container">
+        <!-- Drop Zone -->
+        <div id="dropZone" class="drop-zone">
+            <div class="drop-zone-content">
+                <div class="drop-zone-icon">📁</div>
+                <h2>Drag & Drop Files Here</h2>
+                <p>or</p>
+                <button type="button" id="selectFilesBtn" class="button button-primary">
+                    Select Files
+                </button>
+                <input type="file" id="fileInput" name="documents" multiple accept=".pdf,.docx,.txt" style="display: none;">
+                <p class="supported-types">Supported: PDF, Word (.docx), Text (.txt)</p>
+                <p class="file-size-limit">Max file size: 50MB per file</p>
+            </div>
+        </div>
+        
+        <!-- File List -->
+        <div id="fileList" class="file-list" style="display: none;">
+            <h3>Selected Files</h3>
+            <div id="fileItems" class="file-items"></div>
+            <div class="upload-actions">
+                <button type="button" id="uploadBtn" class="button button-primary">
+                    🚀 Process Documents
+                </button>
+                <button type="button" id="clearBtn" class="button button-secondary">
+                    Clear All
+                </button>
+            </div>
+        </div>
+        
+        <!-- Progress -->
+        <div id="uploadProgress" class="upload-progress" style="display: none;">
+            <div class="progress-content">
+                <div class="spinner"></div>
+                <p id="progressText">Processing documents...</p>
+            </div>
+        </div>
+        
+        <!-- Success/Error Messages -->
+        <div id="uploadMessages" class="upload-messages"></div>
+    </div>
+    
+    <div class="button-group">
+        <a href="{{ url_for('manage_projects') }}" class="button button-secondary">← Back to Projects</a>
+    </div>
+</div>
+
+<style>
+.upload-card {
+    max-width: 800px;
+    margin: 2rem auto;
+}
+
+.upload-description {
+    text-align: center;
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.upload-container {
+    margin: 2rem 0;
+}
+
+.drop-zone {
+    border: 3px dashed #4a90e2;
+    border-radius: 12px;
+    padding: 3rem 2rem;
+    text-align: center;
+    background: linear-gradient(135deg, #f0f7ff 0%, #e6f2ff 100%);
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.drop-zone:hover {
+    border-color: #357abd;
+    background: linear-gradient(135deg, #e6f2ff 0%, #d6ebff 100%);
+    transform: translateY(-2px);
+}
+
+.drop-zone.drag-over {
+    border-color: #27ae60;
+    background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+    transform: scale(1.02);
+}
+
+.drop-zone-content h2 {
+    margin: 1rem 0;
+    color: #2c3e50;
+}
+
+.drop-zone-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.supported-types, .file-size-limit {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 1rem;
+}
+
+.file-list {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: #f8f9fa;
+    border-radius: 12px;
+}
+
+.file-list h3 {
+    margin-bottom: 1rem;
+    color: #2c3e50;
+}
+
+.file-items {
+    margin: 1rem 0;
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8rem 1rem;
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    border: 2px solid #e0e0e0;
+    transition: all 0.2s ease;
+}
+
+.file-item:hover {
+    border-color: #4a90e2;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex: 1;
+}
+
+.file-icon {
+    font-size: 1.5rem;
+}
+
+.file-details {
+    flex: 1;
+}
+
+.file-name {
+    font-weight: 600;
+    color: #2c3e50;
+    word-break: break-word;
+}
+
+.file-size {
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.file-remove {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.file-remove:hover {
+    background: #c0392b;
+}
+
+.upload-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.upload-actions button {
+    flex: 1;
+}
+
+.upload-progress {
+    margin-top: 2rem;
+    padding: 2rem;
+    background: #f0f7ff;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.progress-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #e0e0e0;
+    border-top: 4px solid #4a90e2;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#progressText {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.upload-messages {
+    margin-top: 1.5rem;
+}
+
+.message {
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.message-success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.message-error {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.message-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const selectFilesBtn = document.getElementById('selectFilesBtn');
+    const fileList = document.getElementById('fileList');
+    const fileItems = document.getElementById('fileItems');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const uploadMessages = document.getElementById('uploadMessages');
+    const progressText = document.getElementById('progressText');
+    
+    let selectedFiles = [];
+    
+    // Click to select files
+    selectFilesBtn.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('click', (e) => {
+        if (e.target === dropZone || e.target.closest('.drop-zone-content')) {
+            fileInput.click();
+        }
+    });
+    
+    // File input change
+    fileInput.addEventListener('change', function(e) {
+        handleFiles(Array.from(e.target.files));
+    });
+    
+    // Drag and drop events
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('drag-over');
+    });
+    
+    dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+    });
+    
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+        
+        const files = Array.from(e.dataTransfer.files);
+        handleFiles(files);
+    });
+    
+    function handleFiles(files) {
+        // Filter for supported file types
+        const supportedExtensions = ['.pdf', '.docx', '.txt'];
+        const validFiles = files.filter(file => {
+            const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            return supportedExtensions.includes(ext);
+        });
+        
+        if (validFiles.length === 0) {
+            showMessage('No valid files selected. Please upload PDF, Word (.docx), or Text files.', 'error');
+            return;
+        }
+        
+        selectedFiles = validFiles;
+        displayFileList();
+    }
+    
+    function displayFileList() {
+        fileItems.innerHTML = '';
+        
+        selectedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            
+            const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+            const icon = ext === '.pdf' ? '📄' : ext === '.docx' ? '📝' : '📃';
+            
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <span class="file-icon">${icon}</span>
+                    <div class="file-details">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                    </div>
+                </div>
+                <button class="file-remove" data-index="${index}">Remove</button>
+            `;
+            
+            fileItems.appendChild(fileItem);
+        });
+        
+        fileList.style.display = 'block';
+        uploadMessages.innerHTML = '';
+        
+        // Add remove button listeners
+        document.querySelectorAll('.file-remove').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const index = parseInt(this.dataset.index);
+                selectedFiles.splice(index, 1);
+                if (selectedFiles.length === 0) {
+                    fileList.style.display = 'none';
+                } else {
+                    displayFileList();
+                }
+            });
+        });
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+    
+    clearBtn.addEventListener('click', function() {
+        selectedFiles = [];
+        fileList.style.display = 'none';
+        fileInput.value = '';
+        uploadMessages.innerHTML = '';
+    });
+    
+    uploadBtn.addEventListener('click', function() {
+        if (selectedFiles.length === 0) {
+            showMessage('Please select files to upload', 'error');
+            return;
+        }
+        
+        uploadDocuments();
+    });
+    
+    function uploadDocuments() {
+        const formData = new FormData();
+        selectedFiles.forEach(file => {
+            formData.append('documents', file);
+        });
+        
+        uploadProgress.style.display = 'block';
+        uploadBtn.disabled = true;
+        clearBtn.disabled = true;
+        uploadMessages.innerHTML = '';
+        progressText.textContent = 'Processing documents...';
+        
+        fetch('/upload-documents', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            uploadProgress.style.display = 'none';
+            uploadBtn.disabled = false;
+            clearBtn.disabled = false;
+            
+            if (data.success) {
+                showMessage(data.message, 'success');
+                if (data.errors && data.errors.length > 0) {
+                    showMessage('Some files had issues: ' + data.errors.join(', '), 'warning');
+                }
+                
+                // Redirect to project creation page after a short delay
+                setTimeout(() => {
+                    window.location.href = '/create-project-from-documents';
+                }, 2000);
+            } else {
+                showMessage('Error: ' + data.error, 'error');
+                if (data.errors && data.errors.length > 0) {
+                    showMessage('Details: ' + data.errors.join(', '), 'error');
+                }
+            }
+        })
+        .catch(error => {
+            uploadProgress.style.display = 'none';
+            uploadBtn.disabled = false;
+            clearBtn.disabled = false;
+            showMessage('Upload failed: ' + error.message, 'error');
+        });
+    }
+    
+    function showMessage(text, type) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message message-${type}`;
+        messageDiv.textContent = text;
+        uploadMessages.appendChild(messageDiv);
+    }
+});
+</script>
+{% endblock %}
+
