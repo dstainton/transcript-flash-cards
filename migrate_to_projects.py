@@ -34,8 +34,8 @@ def migrate():
     print("="*60 + "\n")
     
     if not migration_needed():
-        print("✓ Migration not needed - projects folder already exists")
-        print("  or no existing data found.\n")
+        print("[OK] Migration not needed - projects folder already exists")
+        print("     or no existing data found.\n")
         return True
     
     try:
@@ -45,8 +45,8 @@ def migrate():
         # Create default project
         print("1. Creating default project...")
         default_project = pm.create_project("Scrum Certification")
-        print(f"   ✓ Created project: {default_project.name}")
-        print(f"   ✓ Project folder: {default_project.folder}\n")
+        print(f"   [OK] Created project: {default_project.name}")
+        print(f"   [OK] Project folder: {default_project.folder}\n")
         
         # Migrate transcripts folder
         if os.path.exists('transcripts'):
@@ -63,33 +63,33 @@ def migrate():
                     shutil.copy2(old_path, new_path)
                     file_count += 1
             
-            print(f"   ✓ Copied {file_count} files to documents/")
+            print(f"   [OK] Copied {file_count} files to documents/")
             
             # Rename old folder to keep as backup
             shutil.move(old_transcripts, 'transcripts.backup')
-            print(f"   ✓ Original folder backed up as 'transcripts.backup'\n")
+            print(f"   [OK] Original folder backed up as 'transcripts.backup'\n")
         
         # Migrate flashcards.json
         if os.path.exists('flashcards.json'):
             print("3. Migrating flashcards.json...")
             shutil.copy2('flashcards.json', default_project.flashcards_path)
             default_project.load_flashcards()
-            print(f"   ✓ Migrated {len(default_project.flashcards)} flashcards")
+            print(f"   [OK] Migrated {len(default_project.flashcards)} flashcards")
             
             # Backup original
             shutil.move('flashcards.json', 'flashcards.json.backup')
-            print(f"   ✓ Original backed up as 'flashcards.json.backup'\n")
+            print(f"   [OK] Original backed up as 'flashcards.json.backup'\n")
         
         # Migrate mastery.json
         if os.path.exists('mastery.json'):
             print("4. Migrating mastery.json...")
             shutil.copy2('mastery.json', default_project.mastery_path)
             default_project.load_mastery()
-            print(f"   ✓ Migrated {len(default_project.mastery)} mastered cards")
+            print(f"   [OK] Migrated {len(default_project.mastery)} mastered cards")
             
             # Backup original
             shutil.move('mastery.json', 'mastery.json.backup')
-            print(f"   ✓ Original backed up as 'mastery.json.backup'\n")
+            print(f"   [OK] Original backed up as 'mastery.json.backup'\n")
         
         # Migrate history.json
         if os.path.exists('history.json'):
@@ -98,14 +98,14 @@ def migrate():
             default_project.load_history()
             exam_count = len(default_project.history.get('exam_history', {}))
             study_count = len(default_project.history.get('study_history', {}))
-            print(f"   ✓ Migrated {exam_count} exam sessions and {study_count} study sessions")
+            print(f"   [OK] Migrated {exam_count} exam sessions and {study_count} study sessions")
             
             # Backup original
             shutil.move('history.json', 'history.json.backup')
-            print(f"   ✓ Original backed up as 'history.json.backup'\n")
+            print(f"   [OK] Original backed up as 'history.json.backup'\n")
         
         print("="*60)
-        print("✓ MIGRATION COMPLETED SUCCESSFULLY!")
+        print("[SUCCESS] MIGRATION COMPLETED SUCCESSFULLY!")
         print("="*60)
         print("\nYour existing data has been preserved in:")
         print(f"  - {default_project.folder}")
@@ -116,7 +116,7 @@ def migrate():
         return True
         
     except Exception as e:
-        print(f"\n✗ ERROR during migration: {e}")
+        print(f"\n[ERROR] Migration failed: {e}")
         print("\nMigration failed. Your original files are safe.")
         print("Please report this error.\n")
         return False
