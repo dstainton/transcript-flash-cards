@@ -153,13 +153,14 @@ class Project:
     
     def get_stats(self) -> Dict:
         """Get project statistics"""
+        topics = sorted(set(card['topic'] for card in self.flashcards)) if self.flashcards else []
         stats = {
             'total_flashcards': len(self.flashcards),
-            'total_mastered': len(self.mastery),
+            'mastered_count': len(self.mastery),
             'mastery_percentage': (len(self.mastery) / len(self.flashcards) * 100) if self.flashcards else 0,
-            'total_study_sessions': len(self.history.get('study_history', {})),
-            'total_exam_sessions': len(self.history.get('exam_history', {})),
-            'topics': sorted(set(card['topic'] for card in self.flashcards)) if self.flashcards else []
+            'total_topics': len(topics),
+            'total_sessions': len(self.history.get('study_history', {})) + len(self.history.get('exam_history', {})),
+            'topics': topics
         }
         return stats
     
