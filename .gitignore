@@ -143,12 +143,5 @@ debug.log
 # Transcript files (raw content)
 transcripts/*.txt
 
-# Project-specific data (documents and generated files)
-projects/*/documents/
-projects/*/flashcards.json
-projects/*/mastery.json
-projects/*/history.json
-
-# Keep project metadata and folder structure
-!projects/*/project.json
-!projects/*/.gitkeep
+# Project-specific data - exclude entire projects directory
+projects/
