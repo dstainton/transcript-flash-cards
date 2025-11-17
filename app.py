@@ -1020,6 +1020,7 @@ def results():
         
         # Save to project history
         project = get_current_project()
+        project.load_history()  # Load existing history before adding new entry
         project.history['exam_history'][timestamp] = {
             'score': score,
             'total': total_questions,
@@ -1042,6 +1043,7 @@ def results():
         
         # Save to project history
         project = get_current_project()
+        project.load_history()  # Load existing history before adding new entry
         project.history['study_history'][timestamp] = {
             'score': score,
             'total': total_questions,
@@ -1350,6 +1352,7 @@ def exit():  # Changed from exit_session to exit
         
         # Save to project history
         project = get_current_project()
+        project.load_history()  # Load existing history before adding new entry
         if mode == 'exam':
             project.history['exam_history'][timestamp] = {
                 'score': score,
