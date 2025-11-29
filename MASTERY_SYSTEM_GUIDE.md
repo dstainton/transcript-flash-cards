@@ -22,6 +22,7 @@ While studying, you'll see visual feedback on every answer:
 - **Correct answers**: "✅ Correct! 🔥 Streak: 2/3"
 - **Mastered cards**: "✅ Correct! 🎉 CARD MASTERED! You answered correctly 3 times in a row!"
 - **Incorrect answers**: "❌ Incorrect. 🔄 Streak reset to 0/3"
+- **💡 Explanations**: Every answer (correct or incorrect) includes an AI-generated explanation to help you understand the concept better
 
 ### 💾 Persistent Progress
 

@@ -3,7 +3,7 @@ REM Flashcards Application Launcher
 REM This script creates a virtual environment and starts the Flask server
 
 echo ============================================
-echo    Scrum Flashcards Application
+echo        Drew's Flash Cards Application
 echo ============================================
 echo.
 

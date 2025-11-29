@@ -159,6 +159,9 @@
                 <div class="feedback {{ 'correct' if card.correct else 'incorrect' }}">
                     {{ card.feedback }}
                 </div>
+                <div class="explanation">
+                    <strong>💡 Explanation:</strong> {{ card.explanation if card.explanation else 'No explanation available for this card.' }}
+                </div>
             </div>
         </div>
         {% endfor %}

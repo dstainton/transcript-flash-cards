@@ -21,6 +21,7 @@ This flash card application helps users learn and test their knowledge based on 
   - Smart topic extraction and categorization
   - Configurable flashcard counts per topic
   - Intelligent question type selection (True/False, Yes/No, Multiple Choice, Multiple Answer)
+  - AI-generated explanations for every answer to enhance learning
   
 - **Answer Types:**
   - True/False statements
@@ -37,7 +38,8 @@ This flash card application helps users learn and test their knowledge based on 
 - **📚 Study Mode:** 
   - Presents flashcards in random order
   - Focuses on cards not answered correctly
-  - Immediate feedback after each answer
+  - Immediate feedback after each answer with detailed explanations
+  - AI-generated explanations help you understand WHY answers are correct or incorrect
   - Smart mastery system - cards retire after consistent correct answers
   - Visual streak indicators and mastery notifications
   
@@ -264,8 +266,16 @@ If you have data from an older version, these files will be automatically migrat
 - Responsive design for all screen sizes
 - Graceful degradation for older browsers
 
+## Additional Documentation
+
+- **[Mastery System Guide](MASTERY_SYSTEM_GUIDE.md)** - Complete guide to the card mastery and spaced repetition system
+- **[Answer Explanations Guide](EXPLANATION_FEATURE.md)** - How AI-generated explanations enhance your learning
+- **[Installation Guide](INSTALLATION_GUIDE.md)** - Detailed installation instructions for all platforms
+- **[Update Guide](UPDATE_GUIDE.md)** - How to update the application and preserve your data
+
 ## Known Limitations
 
 - Session timeout after 30 minutes
 - Requires active internet connection for API calls
 - Limited to text-based answers
+- Existing flashcards from before the explanation feature will show "No explanation available" (regenerate to get explanations)

@@ -222,7 +222,7 @@ def generate_flashcards(transcript, filename, main_topic=None):
     prompt = f"""
     {topic_context}Generate exactly {CARDS_PER_TRANSCRIPT} flashcards from the following transcript.
     The response must be a valid JSON array containing flashcard objects.
-    Each flashcard object must have these exact keys: 'question', 'answer', and optionally 'options'.
+    Each flashcard object must have these exact keys: 'question', 'answer', 'explanation', and optionally 'options'.
     Format the response as a JSON array without any additional text or explanation.
 
     CRITICAL RULES FOR QUESTION TYPES:
@@ -230,26 +230,31 @@ def generate_flashcards(transcript, filename, main_topic=None):
     1. TRUE/FALSE questions: Use ONLY for statements that can be evaluated as factually true or false.
        - Answer MUST be exactly "True" or "False" (capitalized)
        - Question should be a statement, not a question
-       - Example: "The Product Owner is responsible for maximizing product value."
+       - MUST include "explanation" field with 1-2 sentences explaining WHY the answer is True or False
+       - Example: {{"question": "The Product Owner is responsible for maximizing product value.", "answer": "True", "explanation": "The Product Owner is accountable for maximizing the value of the product resulting from the work of the Scrum Team."}}
        
     2. YES/NO questions: Use ONLY for questions asking about permissions, recommendations, or subjective matters.
        - Answer MUST be exactly "Yes" or "No" (capitalized)
        - Question should end with a question mark
-       - Example: "Should the team estimate in story points?"
+       - MUST include "explanation" field with 1-2 sentences explaining WHY
+       - Example: {{"question": "Should the team estimate in story points?", "answer": "Yes", "explanation": "Story points allow teams to estimate relative complexity without committing to specific time estimates, which is more accurate for complex work."}}
        
     3. MULTIPLE CHOICE: Use for questions with one correct answer from several options.
        - Answer MUST be a single letter: "A", "B", "C", or "D"
        - MUST include "options" array with 4 choices formatted as "A) text", "B) text", etc.
-       - Example: {{"question": "What is the primary role of a Product Owner?", "answer": "A", "options": ["A) Maximize product value", "B) Write code", "C) Manage the team", "D) Create documentation"]}}
+       - MUST include "explanation" field with 1-2 sentences explaining WHY the correct answer is right
+       - Example: {{"question": "What is the primary role of a Product Owner?", "answer": "A", "options": ["A) Maximize product value", "B) Write code", "C) Manage the team", "D) Create documentation"], "explanation": "The Product Owner's primary responsibility is to maximize the value of the product by managing the Product Backlog and ensuring the team works on the most valuable items."}}
        
     4. MULTIPLE ANSWER: Use for questions where multiple options can be correct.
        - Answer MUST be comma-separated letters like "A,C" or "B,C,D" (no spaces)
        - MUST include "options" array with choices formatted as "A) text", "B) text", etc.
+       - MUST include "explanation" field explaining WHY these specific answers are correct
        - Question should indicate multiple answers needed: "(Select all that apply)" or "Which of the following..."
-       - Example: {{"question": "Which of the following are Scrum values? (Select all that apply)", "answer": "A,C,D", "options": ["A) Courage", "B) Speed", "C) Focus", "D) Respect"]}}
+       - Example: {{"question": "Which of the following are Scrum values? (Select all that apply)", "answer": "A,C,D", "options": ["A) Courage", "B) Speed", "C) Focus", "D) Respect"], "explanation": "The five Scrum values are Commitment, Focus, Openness, Respect, and Courage. Speed is not a Scrum value."}}
 
     DO NOT mix question types! If the question asks "Is...", use True/False. If it asks "Should..." or "Can...", use Yes/No.
     Ensure answers match the question type exactly.
+    ALWAYS include an "explanation" field that helps learners understand the concept, not just the answer.
 
     Transcript:
     {transcript}
@@ -403,7 +408,7 @@ def generate_flashcards_from_text(text, topic_name, num_cards):
     IMPORTANT: The JSON array MUST contain precisely {num_cards} flashcard objects.
     
     The response must be a valid JSON array containing flashcard objects.
-    Each flashcard object must have these exact keys: 'question', 'answer', and optionally 'options'.
+    Each flashcard object must have these exact keys: 'question', 'answer', 'explanation', and optionally 'options'.
     Format the response as a JSON array without any additional text or explanation.
 
     CRITICAL RULES FOR QUESTION TYPES:
@@ -411,19 +416,25 @@ def generate_flashcards_from_text(text, topic_name, num_cards):
     1. TRUE/FALSE questions: Use ONLY for statements that can be evaluated as factually true or false.
        - Answer MUST be exactly "True" or "False" (capitalized)
        - Question should be a statement, not a question
+       - MUST include "explanation" field with 1-2 sentences explaining WHY
        
     2. YES/NO questions: Use ONLY for questions asking about permissions, recommendations, or subjective matters.
        - Answer MUST be exactly "Yes" or "No" (capitalized)
        - Question should end with a question mark
+       - MUST include "explanation" field with 1-2 sentences explaining WHY
        
     3. MULTIPLE CHOICE: Use for questions with one correct answer from several options.
        - Answer MUST be a single letter: "A", "B", "C", or "D"
        - MUST include "options" array with 4 choices formatted as "A) text", "B) text", etc.
+       - MUST include "explanation" field with 1-2 sentences explaining WHY the correct answer is right
        
     4. MULTIPLE ANSWER: Use for questions where multiple options can be correct.
        - Answer MUST be comma-separated letters like "A,C" or "B,C,D" (no spaces)
        - MUST include "options" array with choices formatted as "A) text", "B) text", etc.
+       - MUST include "explanation" field explaining WHY these specific answers are correct
        - Question should indicate multiple answers needed
+
+    ALWAYS include an "explanation" field that helps learners understand the concept, not just the answer.
 
     Document content:
     {text[:4000]}
@@ -436,7 +447,8 @@ def generate_flashcards_from_text(text, topic_name, num_cards):
                 {
                     "role": "system",
                     "content": "You generate high-quality flashcards from educational content. "
-                              "Follow the question type rules strictly."
+                              "Follow the question type rules strictly. "
+                              "Always include clear explanations to help learners understand the concepts."
                 },
                 {"role": "user", "content": prompt}
             ],
@@ -756,7 +768,8 @@ def flashcard():
                     'correct': is_correct,
                     'feedback': get_feedback(card['question'], user_answer, card['answer'], is_correct) + ' ⏰ (Time expired)',
                     'answer_type': card.get('answer_type', 'multiple_choice'),
-                    'options': card.get('options', [])
+                    'options': card.get('options', []),
+                    'explanation': card.get('explanation', 'No explanation available.')
                 }
                 
                 # Store in user_answers for results calculation
@@ -774,7 +787,8 @@ def flashcard():
                     'correct': False,
                     'feedback': '⏰ Time expired! No answer submitted.',
                     'answer_type': card.get('answer_type', 'multiple_choice'),
-                    'options': card.get('options', [])
+                    'options': card.get('options', []),
+                    'explanation': card.get('explanation', 'No explanation available.')
                 }
                 
                 # Store in user_answers for results calculation
@@ -834,7 +848,8 @@ def flashcard():
                 'correct': check_answer(card['question'], user_answer, card['answer']),
                 'feedback': get_feedback(card['question'], user_answer, card['answer'], check_answer(card['question'], user_answer, card['answer'])),
                 'answer_type': card.get('answer_type', 'multiple_choice'),
-                'options': card.get('options', [])
+                'options': card.get('options', []),
+                'explanation': card.get('explanation', 'No explanation available.')
             }
             
             # Add to completed cards for display
@@ -887,7 +902,8 @@ def flashcard():
                 'answer_type': card.get('answer_type', 'multiple_choice'),
                 'options': card.get('options', []),
                 'streak': current_streak,
-                'mastered': mastered
+                'mastered': mastered,
+                'explanation': card.get('explanation', 'No explanation available.')
             }
             
             # Add to completed cards list
