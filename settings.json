@@ -4,8 +4,7 @@
     "default_time_per_card": 10,
     "default_total_exam_time": 60,
     "auto_update_enabled": false,
-    "last_update_check": null,
-    "current_version": "v1.0.0",
-    "latest_version": null
+    "last_update_check": "2025-11-29T18:58:02.453060",
+    "current_version": "v1.1.0",
+    "latest_version": "v1.1.0"
 }
-
