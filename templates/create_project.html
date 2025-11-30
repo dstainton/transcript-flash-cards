@@ -668,7 +668,7 @@
         <div class="loading-progress-bar">
             <div class="loading-progress-fill" id="progressFill"></div>
         </div>
-        <p id="loadingStatus" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">Starting...</p>
+        <p id="loadingStatus" style="margin-top: 1rem; color: #666; font-size: 0.9rem; line-height: 1.6;">Starting...</p>
     </div>
 </div>
 
@@ -842,8 +842,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const loadingStatus = document.getElementById('loadingStatus');
         const loadingPhase = document.getElementById('loadingPhase');
         
-        // Submit form via AJAX
+        // Submit form via AJAX and track real progress
         const formData = new FormData(this);
+        let progressId = null;
+        let progressCheckInterval = null;
         
         fetch('/create-project-from-documents', {
             method: 'POST',
@@ -852,15 +854,20 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Show completion
-                progressFill.style.width = '100%';
-                loadingPhase.textContent = '✅ Project created successfully!';
-                loadingStatus.textContent = `Generated ${totalCards} flashcards across ${totalTopics} topics`;
+                progressId = data.progress_id;
                 
-                // Redirect after short delay
-                setTimeout(() => {
-                    window.location.href = data.redirect_url;
-                }, 1500);
+                // Start polling for real progress if we have a progress ID
+                if (progressId) {
+                    checkProgress(progressId);
+                } else {
+                    // Fallback: show completion
+                    progressFill.style.width = '100%';
+                    loadingPhase.textContent = '✅ Project created successfully!';
+                    loadingStatus.textContent = `Generated flashcards`;
+                    setTimeout(() => {
+                        window.location.href = data.redirect_url;
+                    }, 1500);
+                }
             } else {
                 // Show error
                 overlay.style.display = 'none';
@@ -874,24 +881,77 @@ document.addEventListener('DOMContentLoaded', function() {
             window.location.reload();
         });
         
-        // Start progress tracking (update UI every second)
-        let currentTopic = 0;
-        const progressInterval = setInterval(() => {
-            // Update progress bar based on topics completed
-            currentTopic++;
-            if (currentTopic > totalTopics) currentTopic = totalTopics;
-            
-            const progress = (currentTopic / totalTopics) * 100;
-            progressFill.style.width = progress + '%';
-            
-            // Update status text
-            if (currentTopic <= totalTopics) {
-                loadingStatus.textContent = `Generating topic ${currentTopic} of ${totalTopics}...`;
-            }
-        }, 45000 / totalTopics); // Distribute across estimated time
-        
-        // Clear interval when done
-        window.addEventListener('beforeunload', () => clearInterval(progressInterval));
+        // Function to check progress from server
+        function checkProgress(progId) {
+            progressCheckInterval = setInterval(() => {
+                fetch(`/creation-progress/${progId}`)
+                    .then(response => response.json())
+                    .then(progress => {
+                        if (progress.status === 'not_found') {
+                            clearInterval(progressCheckInterval);
+                            return;
+                        }
+                        
+                        const current = progress.current_topic || 0;
+                        const total = progress.total_topics || totalTopics;
+                        const percentage = total > 0 ? (current / total * 100) : 0;
+                        
+                        // Update progress bar
+                        progressFill.style.width = percentage + '%';
+                        
+                        // Update status text with real data
+                        if (progress.status === 'error') {
+                            // Handle error
+                            clearInterval(progressCheckInterval);
+                            loadingPhase.textContent = '❌ Error creating project';
+                            loadingStatus.innerHTML = `<span style="color: #e74c3c;">${progress.error || 'An unknown error occurred'}</span>`;
+                        } else if (progress.status === 'generating' && progress.current_topic_name) {
+                            loadingPhase.textContent = `Generating flashcards with explanations...`;
+                            
+                            // Build the main status line
+                            let statusText = `Topic ${current} of ${total}: "${progress.current_topic_name}"`;
+                            statusText += ` (${progress.flashcards_generated || 0} cards so far)`;
+                            
+                            // Add the detailed current status if available
+                            if (progress.current_status) {
+                                statusText += `<br><em style="color: #4a90e2;">${progress.current_status}</em>`;
+                            }
+                            
+                            loadingStatus.innerHTML = statusText;
+                        } else if (progress.status === 'complete') {
+                            progressFill.style.width = '100%';
+                            loadingPhase.textContent = '✅ Project created successfully!';
+                            loadingStatus.textContent = `Generated ${progress.flashcards_generated} flashcards across ${total} topics`;
+                            
+                            // Stop polling
+                            clearInterval(progressCheckInterval);
+                            
+                            // Update session with final counts
+                            fetch('/update-creation-success', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({
+                                    project_name: progress.project_name,
+                                    flashcard_count: progress.flashcards_generated,
+                                    topic_count: progress.topic_count,
+                                    progress_id: progressId
+                                })
+                            }).then(() => {
+                                // Redirect after updating session
+                                setTimeout(() => {
+                                    window.location.href = `/start`;
+                                }, 1500);
+                            });
+                        } else if (progress.status === 'starting') {
+                            loadingPhase.textContent = 'Creating Your Project...';
+                            loadingStatus.textContent = 'Initializing flashcard generation...';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking progress:', error);
+                    });
+            }, 1000); // Poll every 1 second for real updates
+        }
     });
 });
 </script>

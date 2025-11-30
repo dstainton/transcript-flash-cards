@@ -88,13 +88,32 @@ print("Initializing Project Manager...")
 project_manager = ProjectManager()
 print(f"[OK] Found {len(project_manager.projects)} project(s)\n")
 
-# Global progress tracking for async project creation
+# Global progress tracking for async project creation and file extraction
 creation_progress = {}
+extraction_progress = {}
 
-# Configurable parameters
-CARDS_PER_TRANSCRIPT = 25  # Default number of cards per transcript
-TIME_PER_CARD = 10  # Default time per card in seconds
-TOTAL_EXAM_TIME = 60  # Default total exam time in minutes
+# Load settings for configurable parameters
+def get_app_settings():
+    """Get application settings with defaults"""
+    try:
+        if os.path.exists('settings.json'):
+            with open('settings.json', 'r') as f:
+                return json.load(f)
+    except:
+        pass
+    return {
+        "default_cards_per_topic": 25,
+        "default_time_per_card": 10,
+        "default_total_exam_time": 60
+    }
+
+# Load settings on startup
+_settings = get_app_settings()
+
+# Configurable parameters (loaded from settings)
+CARDS_PER_TRANSCRIPT = _settings.get('default_cards_per_topic', 25)  # Default number of cards per transcript
+TIME_PER_CARD = _settings.get('default_time_per_card', 10)  # Default time per card in seconds
+TOTAL_EXAM_TIME = _settings.get('default_total_exam_time', 60)  # Default total exam time in minutes
 
 # Helper functions for project management
 def get_current_project() -> Project:
@@ -680,6 +699,104 @@ def get_creation_progress(progress_id):
     if progress_id in creation_progress:
         return jsonify(creation_progress[progress_id])
     return jsonify({'status': 'not_found'}), 404
+
+@app.route('/extraction-progress/<progress_id>')
+def get_extraction_progress(progress_id):
+    """Get progress of file extraction"""
+    if progress_id in extraction_progress:
+        return jsonify(extraction_progress[progress_id])
+    return jsonify({'status': 'not_found'}), 404
+
+@app.route('/store-extraction-results', methods=['POST'])
+def store_extraction_results():
+    """Store extraction results in session (called by frontend after background processing completes)"""
+    try:
+        data = request.get_json()
+        session['pending_project'] = {
+            'documents_data': data['documents_data'],
+            'combined_text': data['combined_text'],
+            'document_count': data['document_count'],
+            'suggested_name': data.get('suggested_name', 'New Project'),
+            'ai_topics': data.get('ai_topics', []),
+            'timestamp': datetime.now().isoformat()
+        }
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/update-creation-success', methods=['POST'])
+def update_creation_success():
+    """Update session with final flashcard counts after background generation completes"""
+    try:
+        data = request.get_json()
+        session['creation_success'] = {
+            'project_name': data['project_name'],
+            'flashcard_count': data['flashcard_count'],
+            'topic_count': data['topic_count'],
+            'progress_id': data['progress_id']
+        }
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/suggest-topic-name', methods=['POST'])
+def suggest_topic_name():
+    """Analyze pasted content and suggest a topic name"""
+    try:
+        data = request.get_json()
+        content = data.get('content', '').strip()
+        
+        if not content or len(content) < 50:
+            return jsonify({
+                'success': False,
+                'error': 'Content too short for analysis'
+            }), 400
+        
+        # Take first 2000 characters for analysis
+        sample = content[:2000]
+        word_count = len(content.split())
+        
+        prompt = f"""
+        Analyze this educational content and suggest a concise, descriptive topic name (3-8 words max).
+        
+        The name should:
+        - Capture the main subject or lesson focus
+        - Be clear and specific
+        - Work as a study topic label
+        - Sound like a lesson or chapter title
+        
+        Content length: {word_count} words
+        
+        Respond with ONLY the topic name, nothing else.
+        
+        Content:
+        {sample}
+        """
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You generate clear, concise topic names for educational content."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=30,
+            temperature=0.5,
+        )
+        
+        suggested_name = response.choices[0].message.content.strip()
+        suggested_name = suggested_name.strip('"\'')
+        
+        return jsonify({
+            'success': True,
+            'suggested_name': suggested_name
+        })
+        
+    except Exception as e:
+        print(f"Error suggesting topic name: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/start', methods=['GET', 'POST'])
 def start():
@@ -1394,17 +1511,197 @@ def delete_project(project_id):
     
     return redirect(url_for('manage_projects'))
 
+def _process_documents_background(progress_id, uploaded_files, initial_errors):
+    """Background thread function to process uploaded documents"""
+    processor = DocumentProcessor()
+    errors = list(initial_errors)  # Copy initial errors
+    
+    try:
+        total_files = len(uploaded_files)
+        
+        # Extract text from documents with progress tracking
+        results = {}
+        processing_errors = {}
+        
+        for idx, file_info in enumerate(uploaded_files):
+            filepath = file_info['path']
+            original_name = file_info['original']
+            safe_name = os.path.basename(filepath)
+            
+            # Calculate progress (extraction phase = 0-10%)
+            progress_percentage = 10 * (idx + 1) / total_files
+            
+            # Update progress BEFORE processing
+            extraction_progress[progress_id].update({
+                'status': 'extracting',
+                'current_file': idx + 1,
+                'total_files': total_files,
+                'current_filename': original_name,
+                'current_status': f'Extracting text from document...',
+                'progress_percentage': progress_percentage
+            })
+            
+            print(f"Processing file {idx+1}/{total_files}: {original_name}")
+            
+            try:
+                # Extract text from this file
+                text = processor.extract_text(filepath)
+                if text:
+                    results[safe_name] = text
+                    print(f"  ✓ Extracted {len(text)} characters from {original_name}")
+                    extraction_progress[progress_id]['files_completed'].append(original_name)
+                    extraction_progress[progress_id]['current_status'] = f'Successfully extracted {len(text)} characters'
+                else:
+                    processing_errors[safe_name] = "No text could be extracted"
+                    extraction_progress[progress_id]['current_status'] = f'Warning: No text extracted'
+            except Exception as e:
+                processing_errors[safe_name] = str(e)
+                print(f"  ✗ Error processing {original_name}: {e}")
+                extraction_progress[progress_id]['current_status'] = f'Error: {str(e)}'
+        
+        if processing_errors:
+            errors.extend([f"{k}: {v}" for k, v in processing_errors.items()])
+        
+        if not results:
+            extraction_progress[progress_id].update({
+                'status': 'error',
+                'error': 'Failed to extract text from any document',
+                'errors': errors
+            })
+            return
+        
+        # Update status for AI processing phase
+        extraction_progress[progress_id].update({
+            'status': 'ai_processing',
+            'current_status': 'Getting AI suggestions for flashcard counts...',
+            'ai_file_index': 0,
+            'ai_total_files': len(results)
+        })
+        
+        # Store per-file extracted text (NOT combined)
+        documents_data = []
+        ai_file_index = 0
+        successful_files = len(results)
+        
+        for file_info in uploaded_files:
+            original_filename = file_info['original']
+            filepath = file_info['path']
+            safe_filename = os.path.basename(filepath)
+            
+            # Get extracted text for this file
+            text = results.get(safe_filename, '')
+            if not text:
+                continue
+            
+            # Use ORIGINAL filename as topic name, just remove the file extension
+            topic_name = os.path.splitext(original_filename)[0]  # Remove extension only
+            # Keep everything else: spaces, numbers, "Lesson XX", etc.
+            
+            # Calculate progress (AI flashcard count phase = 10-85%)
+            ai_file_index += 1
+            progress_percentage = 10 + (75 * ai_file_index / successful_files)
+            
+            # Get AI suggestion for optimal flashcard count for this document
+            try:
+                extraction_progress[progress_id].update({
+                    'current_status': f'AI analyzing "{topic_name}"...',
+                    'progress_percentage': progress_percentage,
+                    'ai_file_index': ai_file_index
+                })
+                ai_count, ai_reasoning = suggest_optimal_flashcard_count(text, topic_name)
+            except Exception as e:
+                print(f"Error getting AI count suggestion for {topic_name}: {e}")
+                ai_count = 25  # Fallback
+                ai_reasoning = "Default count"
+            
+            documents_data.append({
+                'original_filename': original_filename,
+                'display_filename': original_filename,
+                'filepath': filepath,
+                'text': text,
+                'suggested_topic': topic_name,
+                'text_length': len(text),
+                'ai_suggested_count': ai_count,
+                'ai_reasoning': ai_reasoning
+            })
+        
+        # Combine all text for project name generation
+        combined_text = '\n\n'.join([doc['text'] for doc in documents_data])
+        
+        # Generate project name suggestion (85-92% progress)
+        extraction_progress[progress_id].update({
+            'status': 'generating_project_name',
+            'current_status': 'Generating project name suggestion...',
+            'progress_percentage': 85
+        })
+        
+        try:
+            suggested_name = generate_project_name_from_text(
+                combined_text,
+                is_multi_document=True,
+                document_count=len(results)
+            )
+        except Exception as e:
+            print(f"Error generating project name: {e}")
+            suggested_name = "New Project"
+        
+        # Extract AI topics (92-100% progress)
+        extraction_progress[progress_id].update({
+            'current_status': 'Extracting topic suggestions...',
+            'progress_percentage': 92
+        })
+        
+        try:
+            ai_topics = extract_topics_from_text(combined_text)
+        except Exception as e:
+            print(f"Error extracting AI topics: {e}")
+            ai_topics = []
+        
+        # Mark extraction as complete
+        extraction_progress[progress_id].update({
+            'status': 'complete',
+            'current_file': len(uploaded_files),
+            'current_filename': '',
+            'current_status': f'Successfully processed {len(results)} document(s)',
+            'progress_percentage': 100,
+            'documents_data': documents_data,
+            'combined_text': combined_text,
+            'document_count': len(results),
+            'processed_files': [doc['original_filename'] for doc in documents_data],
+            'suggested_name': suggested_name,
+            'ai_topics': ai_topics,
+            'errors': errors if errors else None
+        })
+        
+        print(f"✅ Background extraction complete: {len(results)} document(s) processed")
+        
+    except Exception as e:
+        print(f"❌ Error in background extraction: {e}")
+        import traceback
+        traceback.print_exc()
+        extraction_progress[progress_id].update({
+            'status': 'error',
+            'error': str(e)
+        })
+
 @app.route('/upload-documents', methods=['GET', 'POST'])
 def upload_documents():
     """Handle document uploads for creating a new project"""
     if request.method == 'POST':
-        # Check if files were uploaded
-        if 'documents' not in request.files:
-            return jsonify({'success': False, 'error': 'No files uploaded'}), 400
+        # Check if files were uploaded OR content was pasted
+        has_files = 'documents' in request.files and request.files.getlist('documents')
+        has_pasted = 'pasted_content' in request.form
         
-        files = request.files.getlist('documents')
-        if not files or all(f.filename == '' for f in files):
-            return jsonify({'success': False, 'error': 'No files selected'}), 400
+        if not has_files and not has_pasted:
+            return jsonify({'success': False, 'error': 'No files uploaded or content pasted'}), 400
+        
+        files = request.files.getlist('documents') if has_files else []
+        
+        # Filter out empty files
+        files = [f for f in files if f.filename != '']
+        
+        if not files and not has_pasted:
+            return jsonify({'success': False, 'error': 'No valid files or content provided'}), 400
         
         # Initialize document processor
         processor = DocumentProcessor()
@@ -1415,8 +1712,45 @@ def upload_documents():
         
         uploaded_files = []
         errors = []
+        pasted_file_counter = 1
+        
+        # Create progress tracker for extraction
+        progress_id = secrets.token_hex(8)
+        extraction_progress[progress_id] = {
+            'status': 'starting',
+            'current_file': 0,
+            'total_files': 0,
+            'current_filename': '',
+            'current_status': 'Initializing...',
+            'progress_percentage': 0,
+            'files_completed': []
+        }
         
         try:
+            # Handle pasted content first
+            if has_pasted:
+                try:
+                    pasted_data = json.loads(request.form.get('pasted_content'))
+                    temp_dir = os.path.join(os.getcwd(), 'temp_uploads')
+                    os.makedirs(temp_dir, exist_ok=True)
+                    
+                    for pasted_item in pasted_data:
+                        # Create a text file from pasted content
+                        filename = secure_filename(pasted_item['name'])
+                        filepath = os.path.join(temp_dir, filename)
+                        
+                        with open(filepath, 'w', encoding='utf-8') as f:
+                            f.write(pasted_item['content'])
+                        
+                        uploaded_files.append({
+                            'original': pasted_item['name'],
+                            'path': filepath
+                        })
+                        print(f"Created file from pasted content: {pasted_item['name']}")
+                        
+                except Exception as e:
+                    errors.append(f"Error processing pasted content: {str(e)}")
+            
             # Save uploaded files temporarily
             for file in files:
                 if file.filename == '':
@@ -1441,77 +1775,31 @@ def upload_documents():
                     'errors': errors
                 }), 400
             
-            # Extract text from documents (pass file paths)
-            file_paths = [f['path'] for f in uploaded_files]
-            results, processing_errors = processor.process_multiple_documents(file_paths)
+            # Update extraction progress with total count
+            extraction_progress[progress_id]['total_files'] = len(uploaded_files)
+            extraction_progress[progress_id]['status'] = 'extracting'
             
-            if processing_errors:
-                errors.extend([f"{k}: {v}" for k, v in processing_errors.items()])
+            # Start background thread for processing
+            thread = threading.Thread(
+                target=_process_documents_background,
+                args=(progress_id, uploaded_files, errors),
+                daemon=True
+            )
+            thread.start()
             
-            if not results:
-                return jsonify({
-                    'success': False,
-                    'error': 'Failed to extract text from any document',
-                    'errors': errors
-                }), 400
-            
-            # Store per-file extracted text (NOT combined)
-            documents_data = []
-            for file_info in uploaded_files:
-                original_filename = file_info['original']
-                filepath = file_info['path']
-                safe_filename = os.path.basename(filepath)
-                
-                # Get extracted text for this file
-                text = results.get(safe_filename, '')
-                if not text:
-                    continue
-                
-                # Use ORIGINAL filename as topic name, just remove the file extension
-                topic_name = os.path.splitext(original_filename)[0]  # Remove extension only
-                # Keep everything else: spaces, numbers, "Lesson XX", etc.
-                
-                # Get AI suggestion for optimal flashcard count for this document
-                try:
-                    ai_count, ai_reasoning = suggest_optimal_flashcard_count(text, topic_name)
-                except Exception as e:
-                    print(f"Error getting AI count suggestion for {topic_name}: {e}")
-                    ai_count = 25  # Fallback
-                    ai_reasoning = "Default count"
-                
-                documents_data.append({
-                    'original_filename': original_filename,
-                    'display_filename': original_filename,
-                    'filepath': filepath,
-                    'text': text,
-                    'suggested_topic': topic_name,
-                    'text_length': len(text),
-                    'ai_suggested_count': ai_count,
-                    'ai_reasoning': ai_reasoning
-                })
-            
-            # Combine all text for project name generation
-            combined_text = '\n\n'.join([doc['text'] for doc in documents_data])
-            
-            # Store information in session for project creation
-            session['pending_project'] = {
-                'documents_data': documents_data,
-                'combined_text': combined_text,
-                'document_count': len(results),
-                'timestamp': datetime.now().isoformat()
-            }
-            
+            # Return immediately with progress ID
             return jsonify({
                 'success': True,
-                'message': f'Successfully processed {len(results)} document(s)',
-                'document_count': len(results),
-                'errors': errors if errors else None
+                'message': f'Processing {len(uploaded_files)} document(s)...',
+                'extraction_progress_id': progress_id,
+                'document_count': len(uploaded_files)
             })
         
         except Exception as e:
             # Clean up temp files on error
-            for filepath in uploaded_files:
+            for file_info in uploaded_files:
                 try:
+                    filepath = file_info['path']
                     if os.path.exists(filepath):
                         os.remove(filepath)
                 except:
@@ -1524,6 +1812,83 @@ def upload_documents():
     
     # GET request - show upload page
     return render_template('upload_documents.html')
+
+def _generate_flashcards_background(progress_id, project_id, topics_to_generate, project_name):
+    """Background thread function to generate flashcards"""
+    import shutil
+    from flask import session as flask_session
+    try:
+        # Get the project
+        new_project = project_manager.get_project(project_id)
+        if not new_project:
+            creation_progress[progress_id]['status'] = 'error'
+            creation_progress[progress_id]['error'] = 'Project not found'
+            return
+        
+        # Generate flashcards with progress tracking
+        total_flashcards_generated = 0
+        for idx, topic_info in enumerate(topics_to_generate):
+            # Update progress - preparing to generate
+            creation_progress[progress_id].update({
+                'status': 'generating',
+                'current_topic': idx + 1,
+                'current_topic_name': topic_info['name'],
+                'current_status': f"Preparing to generate flashcards..."
+            })
+            
+            print(f"[{idx+1}/{len(topics_to_generate)}] Generating {topic_info['count']} flashcards for: {topic_info['name']}")
+            
+            # Update progress - calling API
+            creation_progress[progress_id]['current_status'] = f"Calling OpenAI API (this may take 10-30 seconds)..."
+            
+            # Generate flashcards
+            topic_flashcards = generate_flashcards_from_text(
+                topic_info['text'],
+                topic_info['name'],
+                topic_info['count']
+            )
+            
+            # Update progress - processing response
+            creation_progress[progress_id]['current_status'] = f"Processing API response..."
+            
+            # Add to project
+            new_project.flashcards.extend(topic_flashcards)
+            total_flashcards_generated += len(topic_flashcards)
+            
+            # Update progress - completed this topic
+            creation_progress[progress_id].update({
+                'flashcards_generated': total_flashcards_generated,
+                'current_status': f"Completed! Generated {len(topic_flashcards)} cards for this topic."
+            })
+        
+        num_topics = len(topics_to_generate)
+        
+        # Mark progress as complete
+        creation_progress[progress_id]['status'] = 'complete'
+        creation_progress[progress_id]['flashcards_generated'] = total_flashcards_generated
+        creation_progress[progress_id]['project_name'] = project_name
+        creation_progress[progress_id]['topic_count'] = num_topics
+        
+        # Save the project
+        new_project.save_flashcards()
+        
+        # Clean up temp directory
+        temp_dir = os.path.join(os.getcwd(), 'temp_uploads')
+        if os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+                os.makedirs(temp_dir, exist_ok=True)
+            except:
+                pass
+        
+        print(f"✅ Background generation complete: {total_flashcards_generated} flashcards in {num_topics} topics")
+        
+    except Exception as e:
+        print(f"❌ Error in background generation: {e}")
+        import traceback
+        traceback.print_exc()
+        creation_progress[progress_id]['status'] = 'error'
+        creation_progress[progress_id]['error'] = str(e)
 
 @app.route('/create-project-from-documents', methods=['GET', 'POST'])
 def create_project_from_documents():
@@ -1602,76 +1967,29 @@ def create_project_from_documents():
                 'project_id': new_project.id
             }
             
-            # Generate flashcards with progress tracking
-            total_flashcards_generated = 0
-            for idx, topic_info in enumerate(topics_to_generate):
-                # Update progress
-                creation_progress[progress_id].update({
-                    'status': 'generating',
-                    'current_topic': idx + 1,
-                    'current_topic_name': topic_info['name']
-                })
-                
-                print(f"[{idx+1}/{len(topics_to_generate)}] Generating {topic_info['count']} flashcards for: {topic_info['name']}")
-                
-                # Generate flashcards
-                topic_flashcards = generate_flashcards_from_text(
-                    topic_info['text'],
-                    topic_info['name'],
-                    topic_info['count']
-                )
-                
-                # Add to project
-                new_project.flashcards.extend(topic_flashcards)
-                total_flashcards_generated += len(topic_flashcards)
-                
-                # Update progress
-                creation_progress[progress_id]['flashcards_generated'] = total_flashcards_generated
-            
-            num_topics = len(topics_to_generate)
-            
-            # Mark progress as complete
-            creation_progress[progress_id]['status'] = 'complete'
-            creation_progress[progress_id]['flashcards_generated'] = total_flashcards_generated
-            
-            # Save the project
-            new_project.save_flashcards()
-            
-            # Clean up temp directory
-            temp_dir = os.path.join(os.getcwd(), 'temp_uploads')
-            if os.path.exists(temp_dir):
-                try:
-                    shutil.rmtree(temp_dir)
-                    os.makedirs(temp_dir, exist_ok=True)
-                except:
-                    pass
+            # Start background thread for generation
+            thread = threading.Thread(
+                target=_generate_flashcards_background,
+                args=(progress_id, new_project.id, topics_to_generate, project_name),
+                daemon=True
+            )
+            thread.start()
             
             # Clear pending project from session
-            del session['pending_project']
+            session.pop('pending_project', None)
             
-            # Set as current project and reload its data
+            # Set as current project
             set_current_project(new_project.id)
             
-            # IMPORTANT: Reload the project from project_manager to ensure latest data
-            current_proj = project_manager.get_project(new_project.id)
-            if current_proj:
-                current_proj.load_flashcards()
-                current_proj.load_mastery()
-                current_proj.load_history()
+            # Note: creation_success will be set by the frontend after generation completes
+            # This ensures the flash message shows the correct flashcard count
             
-            # Store success message in session for after redirect
-            session['creation_success'] = {
-                'project_name': project_name,
-                'flashcard_count': total_flashcards_generated,
-                'topic_count': num_topics,
-                'progress_id': progress_id
-            }
-            
-            # Return success with redirect URL
+            # Return immediately with progress ID - generation happens in background
             return jsonify({
                 'success': True,
                 'redirect_url': url_for('start'),
-                'message': f'Project "{project_name}" created with {total_flashcards_generated} flashcards!'
+                'progress_id': progress_id,
+                'message': f'Project "{project_name}" is being created...'
             })
         
         except Exception as e:
@@ -1685,23 +2003,28 @@ def create_project_from_documents():
             }), 500
     
     # GET request - show project setup page with configuration options
-    # Generate AI suggestions for project name (consider all documents)
-    try:
-        suggested_name = generate_project_name_from_text(
-            pending['combined_text'],
-            is_multi_document=True,
-            document_count=pending['document_count']
-        )
-    except Exception as e:
-        print(f"Error generating project name: {e}")
-        suggested_name = "New Project"
+    # Use pre-generated suggestions from background processing (if available)
+    suggested_name = pending.get('suggested_name')
+    ai_topics = pending.get('ai_topics', [])
     
-    # Generate AI-extracted topics as an option
-    try:
-        ai_topics = extract_topics_from_text(pending['combined_text'])
-    except Exception as e:
-        print(f"Error extracting AI topics: {e}")
-        ai_topics = []
+    # Fallback: generate if not available (shouldn't happen with new background processing)
+    if not suggested_name:
+        try:
+            suggested_name = generate_project_name_from_text(
+                pending['combined_text'],
+                is_multi_document=True,
+                document_count=pending['document_count']
+            )
+        except Exception as e:
+            print(f"Error generating project name: {e}")
+            suggested_name = "New Project"
+    
+    if not ai_topics:
+        try:
+            ai_topics = extract_topics_from_text(pending['combined_text'])
+        except Exception as e:
+            print(f"Error extracting AI topics: {e}")
+            ai_topics = []
     
     return render_template('create_project.html',
                          suggested_name=suggested_name,
@@ -1739,8 +2062,23 @@ def exit():  # Changed from exit_session to exit
                 'topics': session.get('topics', [])
             }
         project.save_history()
-            
+    
+    # Preserve current project selection and any other persistent session data
+    current_project_id = session.get('current_project_id')
+    creation_success = session.get('creation_success')
+    pending_project = session.get('pending_project')
+    
+    # Clear session data
     session.clear()
+    
+    # Restore persistent data
+    if current_project_id:
+        session['current_project_id'] = current_project_id
+    if creation_success:
+        session['creation_success'] = creation_success
+    if pending_project:
+        session['pending_project'] = pending_project
+    
     return redirect(url_for('index'))
 
 def get_feedback(question, user_answer, correct_answer, is_correct):
@@ -1798,6 +2136,290 @@ def calculate_percentage(score, total):
         return (score / total) * 100 if total > 0 else 0
     except ZeroDivisionError:
         return 0
+
+# Settings Management
+def load_settings():
+    """Load settings from settings.json"""
+    settings_file = 'settings.json'
+    default_settings = {
+        "openai_api_key_file": "openaikey.txt",
+        "default_cards_per_topic": 25,
+        "default_time_per_card": 10,
+        "default_total_exam_time": 60,
+        "auto_update_enabled": False,
+        "last_update_check": None
+    }
+    
+    try:
+        if os.path.exists(settings_file):
+            with open(settings_file, 'r') as f:
+                return json.load(f)
+        else:
+            # Create default settings file
+            with open(settings_file, 'w') as f:
+                json.dump(default_settings, f, indent=4)
+            return default_settings
+    except Exception as e:
+        print(f"Error loading settings: {e}")
+        return default_settings
+
+def save_settings(settings):
+    """Save settings to settings.json"""
+    try:
+        with open('settings.json', 'w') as f:
+            json.dump(settings, f, indent=4)
+        return True
+    except Exception as e:
+        print(f"Error saving settings: {e}")
+        return False
+
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    """Settings page for API key and configuration"""
+    if request.method == 'POST':
+        try:
+            # Get current settings
+            current_settings = load_settings()
+            
+            # Update OpenAI API key
+            new_key = request.form.get('openai_key', '').strip()
+            if new_key:
+                with open('openaikey.txt', 'w') as f:
+                    f.write(new_key)
+            
+            # Update settings
+            current_settings['default_cards_per_topic'] = int(request.form.get('default_cards_per_topic', 25))
+            current_settings['default_time_per_card'] = int(request.form.get('default_time_per_card', 10))
+            current_settings['default_total_exam_time'] = int(request.form.get('default_total_exam_time', 60))
+            current_settings['auto_update_enabled'] = 'auto_update_enabled' in request.form
+            
+            # Save settings
+            if save_settings(current_settings):
+                flash('Settings saved successfully!', 'success')
+            else:
+                flash('Error saving settings', 'error')
+            
+            return redirect(url_for('settings'))
+        except Exception as e:
+            flash(f'Error updating settings: {str(e)}', 'error')
+            return redirect(url_for('settings'))
+    
+    # GET request - show settings page
+    current_settings = load_settings()
+    
+    # Read current API key (masked)
+    try:
+        with open('openaikey.txt', 'r') as f:
+            current_key = f.read().strip()
+            # Mask the key for display
+            if len(current_key) > 8:
+                current_key = current_key[:8] + '...' + current_key[-4:]
+    except:
+        current_key = ''
+    
+    return render_template('settings.html', 
+                         settings=current_settings,
+                         current_key=current_key)
+
+def get_current_version():
+    """Get the current version tag"""
+    try:
+        # Try to get the current tag
+        result = subprocess.run(['git', 'describe', '--tags', '--exact-match'],
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        
+        # If not on a tag, get the latest tag we're based on
+        result = subprocess.run(['git', 'describe', '--tags', '--abbrev=0'],
+                              capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        
+        return 'unknown'
+    except:
+        return 'unknown'
+
+def get_latest_release_tag():
+    """Get the latest release tag from remote"""
+    try:
+        # Fetch tags
+        subprocess.run(['git', 'fetch', '--tags'], 
+                      capture_output=True, text=True, timeout=30)
+        
+        # Get all tags sorted by version
+        result = subprocess.run(['git', 'tag', '-l', '--sort=-v:refname'],
+                              capture_output=True, text=True, timeout=10)
+        
+        if result.returncode != 0:
+            return None
+        
+        tags = [tag.strip() for tag in result.stdout.split('\n') if tag.strip()]
+        
+        # Return the latest version tag (first in list after sorting)
+        if tags:
+            return tags[0]
+        return None
+    except:
+        return None
+
+def compare_versions(current, latest):
+    """Compare version strings (e.g., v1.0.0 vs v1.1.0)"""
+    def parse_version(v):
+        # Remove 'v' prefix if present
+        v = v.lstrip('v')
+        # Split and convert to integers for comparison
+        parts = v.split('.')
+        return tuple(int(p) for p in parts if p.isdigit())
+    
+    try:
+        current_parts = parse_version(current)
+        latest_parts = parse_version(latest)
+        return latest_parts > current_parts
+    except:
+        # If parsing fails, do string comparison
+        return latest != current
+
+@app.route('/check-updates')
+def check_updates():
+    """Check for production release updates from git repository"""
+    try:
+        # Check if we're in a git repository
+        if not os.path.exists('.git'):
+            return jsonify({
+                'success': False,
+                'error': 'Not a git repository. Please install via git clone for update functionality.'
+            })
+        
+        # Get current version
+        current_version = get_current_version()
+        
+        # Get latest release tag
+        latest_version = get_latest_release_tag()
+        
+        if not latest_version:
+            return jsonify({
+                'success': False,
+                'error': 'No release tags found in repository'
+            })
+        
+        # Update last check time
+        settings = load_settings()
+        settings['last_update_check'] = datetime.now().isoformat()
+        settings['current_version'] = current_version
+        settings['latest_version'] = latest_version
+        save_settings(settings)
+        
+        # Compare versions
+        if compare_versions(current_version, latest_version):
+            return jsonify({
+                'success': True,
+                'update_available': True,
+                'current_version': current_version,
+                'latest_version': latest_version,
+                'message': f'Update available: {current_version} → {latest_version}'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'update_available': False,
+                'current_version': current_version,
+                'latest_version': latest_version,
+                'message': f'You are up to date! (version {current_version})'
+            })
+            
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'error': 'Update check timed out'
+        })
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Git is not installed. Please install Git for update functionality.'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/install-update', methods=['POST'])
+def install_update():
+    """Install production release update from git repository"""
+    try:
+        # Check if we're in a git repository
+        if not os.path.exists('.git'):
+            return jsonify({
+                'success': False,
+                'error': 'Not a git repository'
+            })
+        
+        # Get the latest release tag
+        latest_tag = get_latest_release_tag()
+        
+        if not latest_tag:
+            return jsonify({
+                'success': False,
+                'error': 'No release tags found'
+            })
+        
+        # Check for uncommitted changes
+        result = subprocess.run(['git', 'status', '--porcelain'],
+                              capture_output=True, text=True, timeout=10)
+        
+        # Only check files that aren't in .gitignore (user data)
+        uncommitted = [line for line in result.stdout.split('\n') 
+                      if line.strip() and not any(x in line for x in 
+                      ['openaikey.txt', 'settings.json', 'secret_key.txt', 
+                       'projects/', '.venv/', 'temp_uploads/', '.flask_session/'])]
+        
+        if uncommitted:
+            return jsonify({
+                'success': False,
+                'error': 'Uncommitted changes detected. Please stash or commit changes before updating.'
+            })
+        
+        # Fetch latest tags
+        subprocess.run(['git', 'fetch', '--tags'], 
+                      capture_output=True, text=True, timeout=30)
+        
+        # Checkout the latest release tag
+        result = subprocess.run(['git', 'checkout', latest_tag],
+                              capture_output=True, text=True, timeout=60)
+        
+        if result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'error': f'Failed to checkout release: {result.stderr}'
+            })
+        
+        # Update settings with new version
+        settings = load_settings()
+        settings['current_version'] = latest_tag
+        save_settings(settings)
+        
+        return jsonify({
+            'success': True,
+            'message': f'✅ Updated to version {latest_tag}! Please restart the application.',
+            'version': latest_tag
+        })
+        
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'error': 'Update installation timed out'
+        })
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'error': 'Git is not installed'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 if __name__ == '__main__':
     app.run(debug=True)

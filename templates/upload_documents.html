@@ -8,8 +8,42 @@
     <p class="upload-description">Upload your study materials to automatically generate flashcards</p>
     
     <div class="upload-container">
-        <!-- Drop Zone -->
-        <div id="dropZone" class="drop-zone">
+        <!-- Method Tabs -->
+        <div class="method-tabs">
+            <button type="button" id="pasteTab" class="method-tab active">📋 Paste Content</button>
+            <button type="button" id="filesTab" class="method-tab">📁 Upload Files</button>
+        </div>
+        
+        <!-- Paste Zone (Now First/Default) -->
+        <div id="pasteZone" class="paste-zone">
+            <div class="paste-zone-content">
+                <div class="paste-zone-icon">📋</div>
+                <h2>Paste Your Content</h2>
+                <p class="paste-instructions">Paste your content below. AI will automatically suggest a topic name, or you can customize it.</p>
+                
+                <textarea id="pasteTextarea" class="paste-textarea" placeholder="Paste your content here (from transcripts, notes, articles, emails, etc.)&#10;&#10;AI will analyze your content and suggest a topic name as you paste."></textarea>
+                
+                <div id="aiTopicSuggestion" class="ai-topic-suggestion" style="display: none;">
+                    <div class="suggestion-header">
+                        <span class="ai-badge-inline">✨ AI Suggested Topic</span>
+                        <span class="suggestion-status" id="suggestionStatus">Analyzing...</span>
+                    </div>
+                    <div class="paste-input-group">
+                        <input type="text" id="pastedTitle" class="paste-title-input" placeholder="AI will suggest a topic name...">
+                        <p class="input-hint-small">Edit the suggestion or keep it as-is</p>
+                    </div>
+                </div>
+                
+                <button type="button" id="addPastedBtn" class="button button-primary" disabled>
+                    ➕ Add This Content
+                </button>
+                
+                <p class="paste-hint">💡 <strong>Paste multiple times</strong> - each paste becomes a separate topic. Mix with uploaded files if needed!</p>
+            </div>
+        </div>
+        
+        <!-- Drop Zone (Now Second) -->
+        <div id="dropZone" class="drop-zone" style="display: none;">
             <div class="drop-zone-content">
                 <div class="drop-zone-icon">📁</div>
                 <h2>Drag & Drop Files Here</h2>
@@ -29,13 +63,13 @@
             <div id="fileItems" class="file-items"></div>
             <div class="upload-actions">
                 <button type="button" id="uploadBtn" class="button button-primary">
-                    🚀 Process Documents
+                    🚀 Process All Content
                 </button>
                 <button type="button" id="clearBtn" class="button button-secondary">
                     Clear All
                 </button>
             </div>
-            <p class="upload-hint">👆 Click "Process Documents" to extract text and continue</p>
+            <p class="upload-hint">👆 Click "Process All Content" to continue</p>
         </div>
         
         <!-- Progress -->
@@ -43,6 +77,9 @@
             <div class="progress-content">
                 <div class="spinner"></div>
                 <p id="progressText">Processing documents...</p>
+                <div class="extraction-progress-bar" style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; margin-top: 1rem; overflow: hidden;">
+                    <div id="extractionProgressFill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%); transition: width 0.5s ease;"></div>
+                </div>
             </div>
         </div>
         
@@ -57,7 +94,7 @@
 
 <style>
 .upload-card {
-    max-width: 800px;
+    max-width: 900px;
     margin: 2rem auto;
 }
 
@@ -69,6 +106,41 @@
 
 .upload-container {
     margin: 2rem 0;
+}
+
+/* Method Tabs */
+.method-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.method-tab {
+    flex: 1;
+    padding: 0.8rem 1.5rem;
+    border: 2px solid #e0e0e0;
+    background: white;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    color: #666;
+}
+
+.method-tab:hover {
+    border-color: #4a90e2;
+    background: #f8f9fa;
+}
+
+.method-tab.active {
+    border-color: #4a90e2;
+    border-bottom-color: white;
+    background: white;
+    color: #4a90e2;
+    position: relative;
+    z-index: 1;
+    margin-bottom: -2px;
 }
 
 .drop-zone {
@@ -107,6 +179,127 @@
     font-size: 0.9rem;
     color: #666;
     margin-top: 1rem;
+}
+
+/* Paste Zone */
+.paste-zone {
+    border: 3px solid #9b59b6;
+    border-radius: 12px;
+    padding: 2rem;
+    background: linear-gradient(135deg, #f5f0ff 0%, #ede7ff 100%);
+}
+
+.paste-zone-content h2 {
+    margin: 1rem 0;
+    color: #2c3e50;
+}
+
+.paste-zone-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.paste-instructions {
+    text-align: center;
+    color: #666;
+    margin-bottom: 1.5rem;
+}
+
+.paste-input-group {
+    margin-bottom: 1rem;
+}
+
+.paste-input-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.paste-title-input {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 2px solid #d0d0d0;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+.paste-title-input:focus {
+    outline: none;
+    border-color: #9b59b6;
+    box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.1);
+}
+
+.paste-textarea {
+    width: 100%;
+    min-height: 300px;
+    padding: 1rem;
+    border: 2px solid #d0d0d0;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: 'Open Sans', sans-serif;
+    resize: vertical;
+    margin-bottom: 1rem;
+}
+
+.paste-textarea:focus {
+    outline: none;
+    border-color: #9b59b6;
+    box-shadow: 0 0 0 3px rgba(155, 89, 182, 0.1);
+}
+
+.paste-hint {
+    text-align: center;
+    color: #9b59b6;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+}
+
+.ai-topic-suggestion {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, #fff9e6 0%, #ffffff 100%);
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+}
+
+.suggestion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.ai-badge-inline {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.suggestion-status {
+    font-size: 0.85rem;
+    color: #666;
+    font-style: italic;
+}
+
+.suggestion-status.analyzing {
+    color: #667eea;
+}
+
+.suggestion-status.ready {
+    color: #27ae60;
+}
+
+.input-hint-small {
+    margin-top: 0.3rem;
+    font-size: 0.8rem;
+    color: #666;
+    font-style: italic;
 }
 
 .file-list {
@@ -160,6 +353,18 @@
     font-weight: 600;
     color: #2c3e50;
     word-break: break-word;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pasted-badge {
+    background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
 }
 
 .file-size {
@@ -278,6 +483,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const dropZone = document.getElementById('dropZone');
+    const pasteZone = document.getElementById('pasteZone');
+    const filesTab = document.getElementById('filesTab');
+    const pasteTab = document.getElementById('pasteTab');
     const fileInput = document.getElementById('fileInput');
     const selectFilesBtn = document.getElementById('selectFilesBtn');
     const fileList = document.getElementById('fileList');
@@ -287,8 +495,115 @@ document.addEventListener('DOMContentLoaded', function() {
     const uploadProgress = document.getElementById('uploadProgress');
     const uploadMessages = document.getElementById('uploadMessages');
     const progressText = document.getElementById('progressText');
+    const pasteTextarea = document.getElementById('pasteTextarea');
+    const pastedTitle = document.getElementById('pastedTitle');
+    const addPastedBtn = document.getElementById('addPastedBtn');
     
     let selectedFiles = [];
+    let pastedContents = []; // Track pasted content as virtual files
+    
+    // Prevent default drag behavior on entire page to avoid opening files in browser
+    window.addEventListener('dragover', function(e) {
+        e.preventDefault();
+    });
+    
+    window.addEventListener('drop', function(e) {
+        e.preventDefault();
+    });
+    
+    // Tab switching (paste is default)
+    filesTab.addEventListener('click', function() {
+        filesTab.classList.add('active');
+        pasteTab.classList.remove('active');
+        dropZone.style.display = 'block';
+        pasteZone.style.display = 'none';
+    });
+    
+    pasteTab.addEventListener('click', function() {
+        pasteTab.classList.add('active');
+        filesTab.classList.remove('active');
+        pasteZone.style.display = 'block';
+        dropZone.style.display = 'none';
+    });
+    
+    // Auto-switch to files tab when user drags files over the window
+    let pageDragDepth = 0;
+    
+    window.addEventListener('dragenter', function(e) {
+        // Check if dragging files
+        if (e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+            pageDragDepth++;
+            // Auto-switch to files tab
+            if (pasteTab.classList.contains('active')) {
+                filesTab.click();
+            }
+        }
+    });
+    
+    window.addEventListener('dragleave', function(e) {
+        pageDragDepth--;
+    });
+    
+    // Auto-analyze pasted content for topic suggestion
+    let analysisTimeout = null;
+    const aiTopicSuggestion = document.getElementById('aiTopicSuggestion');
+    const suggestionStatus = document.getElementById('suggestionStatus');
+    
+    pasteTextarea.addEventListener('input', function() {
+        const content = this.value.trim();
+        
+        if (content.length < 50) {
+            // Not enough content yet
+            aiTopicSuggestion.style.display = 'none';
+            addPastedBtn.disabled = true;
+            return;
+        }
+        
+        // Show suggestion box
+        aiTopicSuggestion.style.display = 'block';
+        suggestionStatus.textContent = 'Analyzing...';
+        suggestionStatus.className = 'suggestion-status analyzing';
+        pastedTitle.value = 'Analyzing...';
+        addPastedBtn.disabled = true;
+        
+        // Debounce AI analysis (wait for user to stop typing/pasting)
+        clearTimeout(analysisTimeout);
+        analysisTimeout = setTimeout(() => {
+            analyzePastedContent(content);
+        }, 1000); // Wait 1 second after last change
+    });
+    
+    function analyzePastedContent(content) {
+        // Call server to get AI topic suggestion
+        fetch('/suggest-topic-name', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ content: content })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                pastedTitle.value = data.suggested_name;
+                suggestionStatus.textContent = '✓ Ready';
+                suggestionStatus.className = 'suggestion-status ready';
+                addPastedBtn.disabled = false;
+            } else {
+                pastedTitle.value = 'Content ' + (pastedContents.length + 1);
+                suggestionStatus.textContent = 'Using default';
+                suggestionStatus.className = 'suggestion-status';
+                addPastedBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error analyzing content:', error);
+            pastedTitle.value = 'Pasted Content ' + (pastedContents.length + 1);
+            suggestionStatus.textContent = 'Using default';
+            suggestionStatus.className = 'suggestion-status';
+            addPastedBtn.disabled = false;
+        });
+    }
     
     // Click to select files
     selectFilesBtn.addEventListener('click', () => fileInput.click());
@@ -303,26 +618,82 @@ document.addEventListener('DOMContentLoaded', function() {
         handleFiles(Array.from(e.target.files));
     });
     
-    // Drag and drop events
+    // Drag and drop events (fix flickering by tracking drag depth)
+    let dragDepth = 0;
+    
+    dropZone.addEventListener('dragenter', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        dragDepth++;
+        dropZone.classList.add('drag-over');
+    });
+    
     dropZone.addEventListener('dragover', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        dropZone.classList.add('drag-over');
     });
     
     dropZone.addEventListener('dragleave', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        dropZone.classList.remove('drag-over');
+        dragDepth--;
+        if (dragDepth === 0) {
+            dropZone.classList.remove('drag-over');
+        }
     });
     
     dropZone.addEventListener('drop', function(e) {
         e.preventDefault();
         e.stopPropagation();
+        dragDepth = 0;
         dropZone.classList.remove('drag-over');
         
         const files = Array.from(e.dataTransfer.files);
         handleFiles(files);
+    });
+    
+    // Handle pasted content
+    addPastedBtn.addEventListener('click', function() {
+        const content = pasteTextarea.value.trim();
+        let title = pastedTitle.value.trim();
+        
+        if (!content) {
+            showMessage('Please paste some content', 'error');
+            return;
+        }
+        
+        // Use default if no title suggested
+        if (!title || title === 'Analyzing...') {
+            title = 'Pasted Content ' + (pastedContents.length + 1);
+        }
+        
+        // Create a virtual "file" from pasted content
+        const pastedFile = {
+            name: title + '.txt',
+            size: content.length,
+            isPasted: true,
+            content: content,
+            type: 'text/plain'
+        };
+        
+        pastedContents.push(pastedFile);
+        
+        // Add to combined files list
+        selectedFiles = [...pastedContents, ...selectedFiles.filter(f => !f.isPasted)];
+        
+        // Clear paste fields
+        pastedTitle.value = '';
+        pasteTextarea.value = '';
+        aiTopicSuggestion.style.display = 'none';
+        addPastedBtn.disabled = true;
+        
+        // Show file list
+        displayFileList();
+        
+        showMessage(`✅ Added pasted content: "${title}"`, 'success');
+        
+        // Keep user on paste tab for easy multiple pastes
+        pasteTextarea.focus();
     });
     
     function handleFiles(files) {
@@ -338,7 +709,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        selectedFiles = validFiles;
+        // Merge with any pasted content
+        selectedFiles = [...pastedContents, ...validFiles];
         displayFileList();
     }
     
@@ -350,13 +722,20 @@ document.addEventListener('DOMContentLoaded', function() {
             fileItem.className = 'file-item';
             
             const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-            const icon = ext === '.pdf' ? '📄' : ext === '.docx' ? '📝' : '📃';
+            let icon = ext === '.pdf' ? '📄' : ext === '.docx' ? '📝' : '📃';
+            let sourceLabel = '';
+            
+            // Check if this is pasted content
+            if (file.isPasted) {
+                icon = '📋';
+                sourceLabel = '<span class="pasted-badge">Pasted</span>';
+            }
             
             fileItem.innerHTML = `
                 <div class="file-info">
                     <span class="file-icon">${icon}</span>
                     <div class="file-details">
-                        <div class="file-name">${file.name}</div>
+                        <div class="file-name">${file.name} ${sourceLabel}</div>
                         <div class="file-size">${formatFileSize(file.size)}</div>
                     </div>
                 </div>
@@ -373,7 +752,19 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.file-remove').forEach(btn => {
             btn.addEventListener('click', function() {
                 const index = parseInt(this.dataset.index);
+                const removedFile = selectedFiles[index];
+                
+                // Remove from selectedFiles
                 selectedFiles.splice(index, 1);
+                
+                // Also remove from pastedContents if it was pasted
+                if (removedFile.isPasted) {
+                    const pastedIndex = pastedContents.findIndex(p => p.name === removedFile.name);
+                    if (pastedIndex >= 0) {
+                        pastedContents.splice(pastedIndex, 1);
+                    }
+                }
+                
                 if (selectedFiles.length === 0) {
                     fileList.style.display = 'none';
                 } else {
@@ -393,8 +784,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     clearBtn.addEventListener('click', function() {
         selectedFiles = [];
+        pastedContents = [];
         fileList.style.display = 'none';
         fileInput.value = '';
+        pasteTextarea.value = '';
+        pastedTitle.value = '';
         uploadMessages.innerHTML = '';
     });
     
@@ -407,70 +801,167 @@ document.addEventListener('DOMContentLoaded', function() {
         uploadDocuments();
     });
     
+    let extractionProgressInterval = null;
+    
     function uploadDocuments() {
         const formData = new FormData();
+        
+        // Add actual files
         selectedFiles.forEach(file => {
-            formData.append('documents', file);
+            if (!file.isPasted) {
+                formData.append('documents', file);
+            }
         });
+        
+        // Add pasted content as JSON
+        if (pastedContents.length > 0) {
+            formData.append('pasted_content', JSON.stringify(pastedContents));
+        }
         
         // Hide file list and show prominent progress
         fileList.style.display = 'none';
         uploadProgress.style.display = 'block';
         uploadMessages.innerHTML = '';
         
-        // Animate progress text
-        let dots = 0;
-        progressText.textContent = 'Extracting text from documents';
-        const progressInterval = setInterval(() => {
-            dots = (dots + 1) % 4;
-            progressText.textContent = 'Extracting text from documents' + '.'.repeat(dots);
-        }, 500);
+        // Show initial progress
+        progressText.textContent = `Uploading ${selectedFiles.length} document(s)...`;
         
+        // Start the upload (this will process in background)
         fetch('/upload-documents', {
             method: 'POST',
             body: formData
         })
         .then(response => response.json())
         .then(data => {
-            clearInterval(progressInterval);
-            uploadProgress.style.display = 'none';
-            
-            if (data.success) {
-                showMessage('✅ ' + data.message, 'success');
-                if (data.errors && data.errors.length > 0) {
-                    showMessage('⚠️ Some files had issues: ' + data.errors.join(', '), 'warning');
-                }
-                
-                // Show AI analysis message
-                progressText.textContent = 'Analyzing content with AI...';
-                uploadProgress.style.display = 'block';
-                
-                // Animate the progress text while waiting
-                let aiDots = 0;
-                const aiInterval = setInterval(() => {
-                    aiDots = (aiDots + 1) % 4;
-                    progressText.textContent = 'Analyzing content with AI' + '.'.repeat(aiDots);
-                }, 500);
-                
-                // Redirect to project creation page after a short delay
-                setTimeout(() => {
-                    clearInterval(aiInterval);
-                    window.location.href = '/create-project-from-documents';
-                }, 2000);
+            if (data.success && data.extraction_progress_id) {
+                // Start polling for progress
+                progressText.textContent = `Processing ${data.document_count} document(s)...`;
+                pollExtractionProgress(data.extraction_progress_id);
             } else {
+                uploadProgress.style.display = 'none';
                 fileList.style.display = 'block';
-                showMessage('❌ Error: ' + data.error, 'error');
+                showMessage('❌ Error: ' + (data.error || 'Unknown error'), 'error');
                 if (data.errors && data.errors.length > 0) {
                     showMessage('Details: ' + data.errors.join(', '), 'error');
                 }
             }
         })
         .catch(error => {
-            clearInterval(progressInterval);
             uploadProgress.style.display = 'none';
             fileList.style.display = 'block';
             showMessage('❌ Upload failed: ' + error.message, 'error');
         });
+    }
+    
+    function pollExtractionProgress(progressId) {
+        const extractionProgressFill = document.getElementById('extractionProgressFill');
+        
+        extractionProgressInterval = setInterval(() => {
+            fetch(`/extraction-progress/${progressId}`)
+                .then(response => response.json())
+                .then(progress => {
+                    if (progress.status === 'not_found') {
+                        clearInterval(extractionProgressInterval);
+                        showMessage('❌ Progress tracking lost', 'error');
+                        return;
+                    }
+                    
+                    // Use server-calculated percentage that accounts for both extraction and AI analysis
+                    const percentage = progress.progress_percentage || 0;
+                    
+                    // Update progress bar
+                    if (extractionProgressFill) {
+                        extractionProgressFill.style.width = percentage + '%';
+                    }
+                    
+                    // Update progress display based on status
+                    if (progress.status === 'extracting') {
+                        const current = progress.current_file || 0;
+                        const total = progress.total_files || 1;
+                        let statusText = `Extracting text (${current} of ${total})`;
+                        if (progress.current_filename) {
+                            statusText += `: ${progress.current_filename}`;
+                        }
+                        if (progress.current_status) {
+                            statusText += `<br><em style="color: #4a90e2;">${progress.current_status}</em>`;
+                        }
+                        progressText.innerHTML = statusText;
+                    } else if (progress.status === 'ai_processing') {
+                        const aiCurrent = progress.ai_file_index || 0;
+                        const aiTotal = progress.ai_total_files || 1;
+                        let statusText = `AI Analysis (${aiCurrent} of ${aiTotal})`;
+                        if (progress.current_status) {
+                            statusText += `<br><em style="color: #4a90e2;">${progress.current_status}</em>`;
+                        }
+                        progressText.innerHTML = statusText;
+                    } else if (progress.status === 'generating_project_name') {
+                        let statusText = `Finalizing...`;
+                        if (progress.current_status) {
+                            statusText = `<em style="color: #4a90e2;">${progress.current_status}</em>`;
+                        }
+                        progressText.innerHTML = statusText;
+                    } else if (progress.status === 'complete') {
+                        if (extractionProgressFill) {
+                            extractionProgressFill.style.width = '100%';
+                        }
+                        clearInterval(extractionProgressInterval);
+                        
+                        // Store in session
+                        fetch('/store-extraction-results', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                documents_data: progress.documents_data,
+                                combined_text: progress.combined_text,
+                                document_count: progress.document_count,
+                                suggested_name: progress.suggested_name,
+                                ai_topics: progress.ai_topics
+                            })
+                        }).then(() => {
+                            // Show success
+                            const filesProcessed = progress.processed_files || [];
+                            uploadProgress.style.display = 'none';
+                            
+                            let successMsg = `✅ Successfully extracted text from ${filesProcessed.length} document(s)`;
+                            showMessage(successMsg, 'success');
+                            
+                            if (filesProcessed.length > 0 && filesProcessed.length <= 5) {
+                                showMessage('📄 Files: ' + filesProcessed.join(', '), 'success');
+                            } else if (filesProcessed.length > 5) {
+                                showMessage(`📄 Processed: ${filesProcessed.slice(0, 3).join(', ')} and ${filesProcessed.length - 3} more...`, 'success');
+                            }
+                            
+                            if (progress.errors && progress.errors.length > 0) {
+                                showMessage('⚠️ Some files had issues: ' + progress.errors.join(', '), 'warning');
+                            }
+                            
+                            // Show AI analysis message
+                            progressText.innerHTML = `
+                                <div style="margin-bottom: 0.5rem;">🤖 Analyzing ${filesProcessed.length} document(s) with AI...</div>
+                                <div style="font-size: 0.9rem; color: #666;">• Generating project name suggestion</div>
+                                <div style="font-size: 0.9rem; color: #666;">• Calculating optimal flashcard counts</div>
+                            `;
+                            uploadProgress.style.display = 'block';
+                            
+                            // Redirect to project creation page
+                            setTimeout(() => {
+                                window.location.href = '/create-project-from-documents';
+                            }, 2500);
+                        });
+                    } else if (progress.status === 'error') {
+                        clearInterval(extractionProgressInterval);
+                        uploadProgress.style.display = 'none';
+                        fileList.style.display = 'block';
+                        showMessage('❌ Error: ' + (progress.error || 'Unknown error'), 'error');
+                        if (progress.errors && progress.errors.length > 0) {
+                            showMessage('Details: ' + progress.errors.join(', '), 'error');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking extraction progress:', error);
+                });
+        }, 1000); // Poll every 1 second
     }
     
     function showMessage(text, type) {

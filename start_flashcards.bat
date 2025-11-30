@@ -41,6 +41,61 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+REM Install git if available (for auto-update functionality)
+pip install -q gitpython 2>nul
+
+REM Check for auto-updates if enabled (production releases only)
+if exist "settings.json" (
+    python -c "import json; settings = json.load(open('settings.json')); exit(0 if settings.get('auto_update_enabled') else 1)" 2>nul
+    if %errorlevel% equ 0 (
+        echo Checking for production release updates...
+        git --version >nul 2>&1
+        if %errorlevel% equ 0 (
+            if exist ".git\" (
+                REM Fetch tags from remote
+                git fetch --tags >nul 2>&1
+                
+                REM Get current version
+                for /f "delims=" %%i in ('git describe --tags --abbrev^=0 2^>nul') do set CURRENT_VER=%%i
+                
+                REM Get latest release tag
+                for /f "delims=" %%i in ('git tag -l --sort^=-v:refname 2^>nul') do (
+                    set LATEST_VER=%%i
+                    goto :found_latest
+                )
+                :found_latest
+                
+                REM Check if update is available
+                if defined LATEST_VER (
+                    if not "!CURRENT_VER!"=="!LATEST_VER!" (
+                        echo.
+                        echo ============================================
+                        echo   New Release Available!
+                        echo   Current: !CURRENT_VER!
+                        echo   Latest:  !LATEST_VER!
+                        echo ============================================
+                        echo Installing update...
+                        echo.
+                        
+                        git checkout !LATEST_VER! >nul 2>&1
+                        if %errorlevel% equ 0 (
+                            echo ✓ Updated to version !LATEST_VER!
+                            echo.
+                        ) else (
+                            echo WARNING: Failed to install update
+                            echo You can update manually from Settings
+                            echo.
+                        )
+                    ) else (
+                        echo ✓ Up to date (version !CURRENT_VER!)
+                        echo.
+                    )
+                )
+            )
+        )
+    )
+)
+
 REM Install/upgrade dependencies
 echo Checking dependencies...
 pip install -q -r requirements.txt

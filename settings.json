@@ -1,0 +1,11 @@
+{
+    "openai_api_key_file": "openaikey.txt",
+    "default_cards_per_topic": 25,
+    "default_time_per_card": 10,
+    "default_total_exam_time": 60,
+    "auto_update_enabled": false,
+    "last_update_check": null,
+    "current_version": "v1.0.0",
+    "latest_version": null
+}
+

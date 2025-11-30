@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Flash Cards{% endblock %}
+
+{% block content %}
+<div class="settings-container">
+    <h1>⚙️ Settings</h1>
+    
+    <form method="POST" action="{{ url_for('settings') }}" class="settings-form">
+        <!-- OpenAI API Key Section -->
+        <div class="settings-section">
+            <h2>OpenAI API Configuration</h2>
+            <div class="settings-item">
+                <label for="openai_key">OpenAI API Key</label>
+                <div class="input-with-button">
+                    <input 
+                        type="password" 
+                        id="openai_key" 
+                        name="openai_key" 
+                        value="{{ current_key }}"
+                        placeholder="sk-..." 
+                        required
+                    >
+                    <button type="button" onclick="toggleKeyVisibility()" class="btn-secondary">
+                        <span id="toggle-icon">👁️</span>
+                    </button>
+                </div>
+                <small class="help-text">Your OpenAI API key for generating flashcards. Get one at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com/api-keys</a></small>
+            </div>
+        </div>
+
+        <!-- Flashcard Defaults Section -->
+        <div class="settings-section">
+            <h2>Flashcard Generation Defaults</h2>
+            <div class="settings-item">
+                <label for="default_cards_per_topic">Default Flashcards per Topic</label>
+                <input 
+                    type="number" 
+                    id="default_cards_per_topic" 
+                    name="default_cards_per_topic" 
+                    value="{{ settings.default_cards_per_topic }}"
+                    min="5" 
+                    max="100" 
+                    required
+                >
+                <small class="help-text">Number of flashcards to generate per topic by default</small>
+            </div>
+            
+            <div class="settings-item">
+                <label for="default_time_per_card">Default Time per Card (seconds)</label>
+                <input 
+                    type="number" 
+                    id="default_time_per_card" 
+                    name="default_time_per_card" 
+                    value="{{ settings.default_time_per_card }}"
+                    min="5" 
+                    max="120" 
+                    required
+                >
+                <small class="help-text">Default time limit for studying each flashcard</small>
+            </div>
+            
+            <div class="settings-item">
+                <label for="default_total_exam_time">Default Total Exam Time (minutes)</label>
+                <input 
+                    type="number" 
+                    id="default_total_exam_time" 
+                    name="default_total_exam_time" 
+                    value="{{ settings.default_total_exam_time }}"
+                    min="5" 
+                    max="180" 
+                    required
+                >
+                <small class="help-text">Default time limit for exam mode</small>
+            </div>
+        </div>
+
+        <!-- Auto-Update Section -->
+        <div class="settings-section">
+            <h2>Software Updates</h2>
+            
+            {% if settings.current_version %}
+            <div class="settings-item">
+                <label>Current Version</label>
+                <div class="version-info">
+                    <strong>{{ settings.current_version }}</strong>
+                    {% if settings.latest_version and settings.current_version != settings.latest_version %}
+                        <span class="update-badge">Update Available: {{ settings.latest_version }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="settings-item">
+                <label class="checkbox-label">
+                    <input 
+                        type="checkbox" 
+                        id="auto_update_enabled" 
+                        name="auto_update_enabled" 
+                        {{ 'checked' if settings.auto_update_enabled else '' }}
+                    >
+                    Enable automatic updates
+                </label>
+                <small class="help-text">Automatically check for and install production releases when starting the application</small>
+            </div>
+            
+            {% if settings.last_update_check %}
+            <div class="settings-item">
+                <small class="info-text">Last checked: {{ settings.last_update_check }}</small>
+            </div>
+            {% endif %}
+            
+            <div class="settings-item">
+                <button type="button" onclick="checkForUpdates()" class="btn-secondary">
+                    Check for Release Updates
+                </button>
+                <div id="update-status" class="update-status"></div>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="settings-actions">
+            <button type="submit" class="btn-primary">Save Settings</button>
+            <a href="{{ url_for('index') }}" class="btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<style>
+.settings-container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 2rem;
+}
+
+.settings-container h1 {
+    margin-bottom: 2rem;
+    color: #333;
+}
+
+.settings-form {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.settings-section {
+    padding: 2rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.settings-section:last-of-type {
+    border-bottom: none;
+}
+
+.settings-section h2 {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: #555;
+    font-size: 1.3rem;
+}
+
+.settings-item {
+    margin-bottom: 1.5rem;
+}
+
+.settings-item:last-child {
+    margin-bottom: 0;
+}
+
+.settings-item label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.settings-item input[type="text"],
+.settings-item input[type="password"],
+.settings-item input[type="number"] {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.input-with-button {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.input-with-button input {
+    flex: 1;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: normal;
+}
+
+.checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.help-text {
+    display: block;
+    margin-top: 0.5rem;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.help-text a {
+    color: #4a90e2;
+    text-decoration: none;
+}
+
+.help-text a:hover {
+    text-decoration: underline;
+}
+
+.info-text {
+    color: #666;
+    font-style: italic;
+}
+
+.settings-actions {
+    padding: 2rem;
+    display: flex;
+    gap: 1rem;
+}
+
+.btn-primary,
+.btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    text-align: center;
+}
+
+.btn-primary {
+    background-color: #4a90e2;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #357abd;
+}
+
+.btn-secondary {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.btn-secondary:hover {
+    background-color: #e0e0e0;
+}
+
+.update-status {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 4px;
+    display: none;
+}
+
+.update-status.show {
+    display: block;
+}
+
+.update-status.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.update-status.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.update-status.info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.version-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 0;
+}
+
+.version-info strong {
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.update-badge {
+    background-color: #ffc107;
+    color: #000;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.nav-link-icon {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem;
+    color: white;
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.nav-link-icon:hover {
+    opacity: 0.8;
+}
+
+.nav-link-icon svg {
+    width: 20px;
+    height: 20px;
+}
+</style>
+
+<script>
+function toggleKeyVisibility() {
+    const input = document.getElementById('openai_key');
+    const icon = document.getElementById('toggle-icon');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = '🙈';
+    } else {
+        input.type = 'password';
+        icon.textContent = '👁️';
+    }
+}
+
+function checkForUpdates() {
+    const statusDiv = document.getElementById('update-status');
+    statusDiv.className = 'update-status show info';
+    statusDiv.textContent = 'Checking for production releases...';
+    
+    fetch('/check-updates')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                if (data.update_available) {
+                    statusDiv.className = 'update-status show success';
+                    statusDiv.innerHTML = `
+                        <strong>${data.message}</strong><br>
+                        <small>Current: ${data.current_version} → Latest: ${data.latest_version}</small><br>
+                        <button onclick="installUpdate()" class="btn-primary" style="margin-top: 0.5rem;">Install Version ${data.latest_version}</button>
+                    `;
+                } else {
+                    statusDiv.className = 'update-status show success';
+                    statusDiv.innerHTML = `<strong>${data.message}</strong>`;
+                }
+            } else {
+                statusDiv.className = 'update-status show error';
+                statusDiv.textContent = 'Error: ' + data.error;
+            }
+        })
+        .catch(error => {
+            statusDiv.className = 'update-status show error';
+            statusDiv.textContent = 'Error checking for updates: ' + error.message;
+        });
+}
+
+function installUpdate() {
+    const statusDiv = document.getElementById('update-status');
+    statusDiv.className = 'update-status show info';
+    statusDiv.textContent = 'Installing production release... This may take a moment.';
+    
+    fetch('/install-update', {method: 'POST'})
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                statusDiv.className = 'update-status show success';
+                statusDiv.innerHTML = `
+                    <strong>${data.message}</strong><br>
+                    <small>Installed version: ${data.version}</small><br>
+                    <small style="color: #d63384; font-weight: bold; margin-top: 0.5rem; display: block;">
+                        ⚠️ Please restart the application now to use the new version
+                    </small>
+                `;
+                
+                // Reload the page after 3 seconds to show new version
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            } else {
+                statusDiv.className = 'update-status show error';
+                statusDiv.textContent = 'Error: ' + data.error;
+            }
+        })
+        .catch(error => {
+            statusDiv.className = 'update-status show error';
+            statusDiv.textContent = 'Error installing update: ' + error.message;
+        });
+}
+</script>
+{% endblock %}
+
