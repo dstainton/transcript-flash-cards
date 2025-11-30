@@ -5,13 +5,13 @@
 {% block content %}
 <div class="card create-project-card">
     <h1>🎯 Create New Project</h1>
-    <p class="page-description">Review AI-generated suggestions and create your project</p>
+    <p class="page-description">Configure your project and flashcard generation</p>
     
     <div class="document-info">
         <p>📄 Processed <strong>{{ document_count }}</strong> document{{ 's' if document_count != 1 else '' }}</p>
     </div>
     
-    <form method="POST" class="create-project-form">
+    <form method="POST" class="create-project-form" id="projectForm">
         <!-- Project Name -->
         <div class="form-group">
             <label for="project_name">
@@ -28,41 +28,190 @@
             <p class="input-hint">You can modify the AI-generated name or use your own</p>
         </div>
         
-        <!-- Topics Preview -->
+        <!-- Topic Strategy Selection -->
         <div class="form-group">
             <label>
-                <strong>Topics & Flashcard Plan</strong>
-                <span class="ai-badge">✨ AI Suggested</span>
+                <strong>Topic Organization Strategy</strong>
+            </label>
+            <div class="strategy-options">
+                <div class="strategy-option">
+                    <input type="radio" id="strategy-per-file" name="topic_strategy" value="one-per-file" checked>
+                    <label for="strategy-per-file" class="strategy-label">
+                        <div class="strategy-header">
+                            <span class="strategy-icon">📄</span>
+                            <strong>One Topic Per File</strong>
+                            <span class="recommended-badge">Recommended</span>
+                        </div>
+                        <p class="strategy-desc">Create one topic for each uploaded document. Best for lesson-based content.</p>
+                    </label>
+                </div>
+                
+                <div class="strategy-option">
+                    <input type="radio" id="strategy-ai" name="topic_strategy" value="ai-extracted">
+                    <label for="strategy-ai" class="strategy-label">
+                        <div class="strategy-header">
+                            <span class="strategy-icon">🤖</span>
+                            <strong>AI-Extracted Topics</strong>
+                        </div>
+                        <p class="strategy-desc">Let AI analyze all content and intelligently determine optimal topic divisions for learning.</p>
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Per-File Configuration (Default) -->
+        <div id="perFileConfig" class="form-group config-section">
+            <label>
+                <strong>Configure Topics & Flashcards</strong>
             </label>
             
-            {% if suggested_topics %}
-            <div class="topics-preview">
-                {% for topic in suggested_topics %}
-                <div class="topic-card">
-                    <div class="topic-header">
-                        <span class="topic-icon">📝</span>
-                        <span class="topic-name">{{ topic.name }}</span>
+            <!-- Flashcard Count Control -->
+            <div class="count-control-section">
+                <div class="count-control-header">
+                    <strong>Flashcard Count Settings</strong>
+                </div>
+                <div class="count-options">
+                    <div class="count-option">
+                        <input type="radio" id="use-ai-counts" name="count_mode" value="ai" checked>
+                        <label for="use-ai-counts" class="count-option-label">
+                            <span class="count-icon">🤖</span>
+                            <div class="count-option-text">
+                                <strong>Use AI Suggestions</strong>
+                                <p>AI analyzes each file and suggests optimal flashcard count</p>
+                            </div>
+                        </label>
                     </div>
-                    <div class="topic-cards-count">
-                        {{ topic.flashcard_count }} flashcards
+                    <div class="count-option">
+                        <input type="radio" id="use-default-count" name="count_mode" value="default">
+                        <label for="use-default-count" class="count-option-label">
+                            <span class="count-icon">🎯</span>
+                            <div class="count-option-text">
+                                <strong>Use My Default</strong>
+                                <div class="default-input-group">
+                                    <input type="number" 
+                                           id="default_count" 
+                                           name="default_count" 
+                                           class="default-count-input"
+                                           value="25"
+                                           min="5"
+                                           max="50">
+                                    <span>cards per topic</span>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <p class="count-hint">💡 <strong>Tip:</strong> You can adjust individual topic counts below regardless of which option you choose</p>
+            </div>
+            
+            <p class="section-hint">Customize the topic name and flashcard count for each document</p>
+            
+            <div class="topics-config">
+                {% for doc in documents_data %}
+                <div class="topic-config-card">
+                    <div class="topic-config-header">
+                        <span class="file-icon">📄</span>
+                        <div class="file-info-section">
+                            <div class="file-name-display">{{ doc.display_filename }}</div>
+                            <div class="file-size-display">{{ (doc.text_length / 1024)|round(1) }} KB of text</div>
+                        </div>
+                    </div>
+                    
+                    <div class="topic-config-fields">
+                        <div class="field-group">
+                            <label for="topic_name_{{ loop.index0 }}">Topic Name:</label>
+                            <input type="text" 
+                                   id="topic_name_{{ loop.index0 }}" 
+                                   name="topic_name_{{ loop.index0 }}" 
+                                   class="topic-name-input"
+                                   value="{{ doc.suggested_topic }}"
+                                   required>
+                        </div>
+                        
+                        <div class="field-group">
+                            <label for="card_count_{{ loop.index0 }}">
+                                Flashcards:
+                                <span class="ai-suggestion-badge" title="{{ doc.ai_reasoning }}">
+                                    🤖 AI: {{ doc.ai_suggested_count }}
+                                </span>
+                            </label>
+                            <input type="number" 
+                                   id="card_count_{{ loop.index0 }}" 
+                                   name="card_count_{{ loop.index0 }}" 
+                                   class="card-count-input"
+                                   value="{{ doc.ai_suggested_count }}"
+                                   data-ai-count="{{ doc.ai_suggested_count }}"
+                                   data-ai-reasoning="{{ doc.ai_reasoning }}"
+                                   min="5"
+                                   max="50"
+                                   required>
+                            <div class="ai-reasoning-hint">{{ doc.ai_reasoning }}</div>
+                        </div>
                     </div>
                 </div>
                 {% endfor %}
                 
-                <div class="topics-summary">
+                <div class="config-summary">
                     <strong>Total:</strong> 
-                    {{ suggested_topics|length }} topics, 
-                    {{ suggested_topics|sum(attribute='flashcard_count') }} flashcards
+                    <span id="perFileTotalTopics">{{ documents_data|length }}</span> topics, 
+                    <span id="perFileTotalCards">{{ documents_data|map(attribute='ai_suggested_count')|sum }}</span> flashcards
+                </div>
+            </div>
+        </div>
+        
+        <!-- AI-Extracted Topics Configuration (Hidden by default) -->
+        <div id="aiTopicsConfig" class="form-group config-section" style="display: none;">
+            <label>
+                <strong>AI-Extracted Topics</strong>
+                <span class="ai-badge">✨ AI Suggested</span>
+            </label>
+            <p class="section-hint">Review and customize AI-detected topics and flashcard counts</p>
+            
+            {% if ai_topics %}
+            <input type="hidden" id="numAiTopics" name="num_topics" value="{{ ai_topics|length }}">
+            <div class="topics-config">
+                {% for topic in ai_topics %}
+                <div class="topic-config-card">
+                    <div class="topic-config-fields wide">
+                        <div class="field-group flex-grow">
+                            <label for="ai_topic_name_{{ loop.index0 }}">Topic Name:</label>
+                            <input type="text" 
+                                   id="ai_topic_name_{{ loop.index0 }}" 
+                                   name="ai_topic_name_{{ loop.index0 }}" 
+                                   class="ai-topic-name-input"
+                                   value="{{ topic.name }}"
+                                   required>
+                        </div>
+                        
+                        <div class="field-group">
+                            <label for="ai_card_count_{{ loop.index0 }}">Flashcards:</label>
+                            <input type="number" 
+                                   id="ai_card_count_{{ loop.index0 }}" 
+                                   name="ai_card_count_{{ loop.index0 }}" 
+                                   class="ai-card-count-input"
+                                   value="{{ topic.flashcard_count }}"
+                                   min="5"
+                                   max="50"
+                                   required>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div class="config-summary">
+                    <strong>Total:</strong> 
+                    <span id="aiTotalTopics">{{ ai_topics|length }}</span> topics, 
+                    <span id="aiTotalCards">{{ ai_topics|sum(attribute='flashcard_count') }}</span> flashcards
                 </div>
             </div>
             {% else %}
-            <p class="no-topics">No topics could be extracted. Please try uploading different documents.</p>
+            <p class="no-topics">AI couldn't extract topics. Please use "One Topic Per File" strategy.</p>
             {% endif %}
         </div>
         
         <!-- Action Buttons -->
         <div class="button-group">
-            <button type="submit" class="button button-success" {% if not suggested_topics %}disabled{% endif %}>
+            <button type="submit" class="button button-success">
                 🚀 Create Project & Generate Flashcards
             </button>
             <a href="{{ url_for('upload_documents') }}" class="button button-secondary">
@@ -71,14 +220,14 @@
         </div>
         
         <div class="processing-note">
-            <p><strong>Note:</strong> Project creation may take 1-2 minutes depending on the number of flashcards being generated.</p>
+            <p><strong>⏱️ Processing Time:</strong> Generation takes ~30-60 seconds per topic. Please be patient!</p>
         </div>
     </form>
 </div>
 
 <style>
 .create-project-card {
-    max-width: 800px;
+    max-width: 900px;
     margin: 2rem auto;
 }
 
@@ -129,6 +278,15 @@
     font-weight: 600;
 }
 
+.recommended-badge {
+    background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
 .form-input {
     width: 100%;
     padding: 12px 16px;
@@ -144,66 +302,302 @@
     box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
 }
 
-.input-hint {
+.input-hint, .section-hint {
     margin-top: 0.5rem;
     font-size: 0.9rem;
     color: #666;
 }
 
-.topics-preview {
+.section-hint {
+    margin-bottom: 1rem;
+}
+
+/* Strategy Options */
+.strategy-options {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.strategy-option {
+    position: relative;
+}
+
+.strategy-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+
+.strategy-label {
+    display: block;
+    padding: 1.5rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.strategy-option input[type="radio"]:checked + .strategy-label {
+    border-color: #4a90e2;
+    background: linear-gradient(135deg, #f0f7ff 0%, #ffffff 100%);
+}
+
+.strategy-label:hover {
+    border-color: #4a90e2;
+}
+
+.strategy-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.strategy-icon {
+    font-size: 1.5rem;
+}
+
+.strategy-desc {
+    margin: 0;
+    color: #666;
+    font-size: 0.9rem;
+    margin-left: 2.3rem;
+}
+
+/* Flashcard Count Control Section */
+.count-control-section {
+    background: linear-gradient(135deg, #fff9e6 0%, #ffffff 100%);
+    border: 2px solid #ffd700;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.count-control-header {
+    margin-bottom: 1rem;
+    color: #2c3e50;
+    font-size: 1.05rem;
+}
+
+.count-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.count-option {
+    position: relative;
+}
+
+.count-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+}
+
+.count-option-label {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.count-option input[type="radio"]:checked + .count-option-label {
+    border-color: #ffd700;
+    background: linear-gradient(135deg, #fffdf0 0%, #ffffff 100%);
+}
+
+.count-option-label:hover {
+    border-color: #ffd700;
+}
+
+.count-icon {
+    font-size: 1.8rem;
+}
+
+.count-option-text {
+    flex: 1;
+}
+
+.count-option-text strong {
+    display: block;
+    margin-bottom: 0.3rem;
+    color: #2c3e50;
+}
+
+.count-option-text p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #666;
+}
+
+.default-input-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.default-count-input {
+    width: 80px;
+    padding: 6px 10px;
+    border: 2px solid #d0d0d0;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.default-count-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+}
+
+.count-hint {
+    margin-top: 1rem;
+    padding: 0.8rem;
+    background: #e3f2fd;
+    border-radius: 6px;
+    color: #1565c0;
+    font-size: 0.9rem;
+    border-left: 3px solid #2196f3;
+}
+
+/* Topic Configuration Cards */
+.config-section {
+    border-top: 2px solid #e0e0e0;
+    padding-top: 1.5rem;
+}
+
+.topics-config {
     background: #f8f9fa;
     padding: 1.5rem;
     border-radius: 12px;
     border: 2px solid #e0e0e0;
 }
 
-.topic-card {
+.topic-config-card {
     background: white;
-    padding: 1rem 1.25rem;
+    padding: 1.25rem;
     border-radius: 8px;
-    margin-bottom: 0.8rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    margin-bottom: 1rem;
     border: 2px solid #e0e0e0;
     transition: all 0.2s ease;
 }
 
-.topic-card:hover {
+.topic-config-card:hover {
     border-color: #4a90e2;
-    transform: translateX(4px);
 }
 
-.topic-card:last-of-type {
+.topic-config-card:last-of-type {
     margin-bottom: 0;
 }
 
-.topic-header {
+.topic-config-header {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e0e0e0;
 }
 
-.topic-icon {
-    font-size: 1.3rem;
+.file-icon {
+    font-size: 2rem;
 }
 
-.topic-name {
+.file-info-section {
+    flex: 1;
+}
+
+.file-name-display {
     font-weight: 600;
     color: #2c3e50;
     font-size: 1rem;
 }
 
-.topic-cards-count {
-    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-    color: white;
-    padding: 4px 12px;
-    border-radius: 12px;
+.file-size-display {
     font-size: 0.85rem;
-    font-weight: 600;
+    color: #666;
+    margin-top: 0.25rem;
 }
 
-.topics-summary {
+.topic-config-fields {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1rem;
+}
+
+.topic-config-fields.wide {
+    grid-template-columns: 3fr 1fr;
+}
+
+.field-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.field-group.flex-grow {
+    flex: 1;
+}
+
+.field-group label {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ai-suggestion-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: help;
+}
+
+.topic-name-input, .ai-topic-name-input {
+    padding: 10px 14px;
+    border: 2px solid #d0d0d0;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.card-count-input, .ai-card-count-input {
+    padding: 10px 14px;
+    border: 2px solid #d0d0d0;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.topic-name-input:focus, .card-count-input:focus,
+.ai-topic-name-input:focus, .ai-card-count-input:focus {
+    outline: none;
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+}
+
+.ai-reasoning-hint {
+    font-size: 0.8rem;
+    color: #667eea;
+    margin-top: 0.3rem;
+    font-style: italic;
+}
+
+.config-summary {
     margin-top: 1.5rem;
     padding-top: 1.5rem;
     border-top: 2px solid #e0e0e0;
@@ -250,14 +644,17 @@
 }
 
 @media (max-width: 768px) {
-    .topic-card {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.8rem;
+    .topic-config-fields {
+        grid-template-columns: 1fr;
     }
     
-    .topic-cards-count {
-        align-self: flex-end;
+    .topic-config-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .count-options {
+        flex-direction: column;
     }
 }
 </style>
@@ -267,18 +664,11 @@
     <div class="loading-content">
         <div class="loading-spinner"></div>
         <h2>Creating Your Project...</h2>
-        <p id="loadingPhase">AI is generating flashcards. This may take 1-2 minutes.</p>
-        <div class="loading-steps">
-            <div class="step active">📝 Extracting topics</div>
-            <div class="step">🎯 Generating flashcards (this takes the longest)</div>
-            <div class="step">✅ Finalizing</div>
+        <p id="loadingPhase">AI is generating flashcards with explanations. This may take 1-3 minutes.</p>
+        <div class="loading-progress-bar">
+            <div class="loading-progress-fill" id="progressFill"></div>
         </div>
-        
-        <!-- Topic generation progress -->
-        <div id="topicProgress" style="display: none;">
-            <h3 style="margin: 1.5rem 0 1rem 0; color: #2c3e50; font-size: 1.1rem;">Generating Flashcards:</h3>
-            <div id="topicList"></div>
-        </div>
+        <p id="loadingStatus" style="margin-top: 1rem; color: #666; font-size: 0.9rem;">Starting...</p>
     </div>
 </div>
 
@@ -289,7 +679,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.8);
+    background: rgba(0, 0, 0, 0.85);
     z-index: 9999;
     display: flex;
     align-items: center;
@@ -298,7 +688,7 @@
 
 .loading-content {
     background: white;
-    padding: 3rem 2rem;
+    padding: 3rem 2.5rem;
     border-radius: 16px;
     text-align: center;
     max-width: 500px;
@@ -327,125 +717,182 @@
 
 .loading-content p {
     color: #666;
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
-.loading-steps {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    align-items: flex-start;
-}
-
-.step {
-    padding: 0.6rem 1rem;
-    background: #f8f9fa;
-    border-radius: 6px;
-    color: #999;
+.loading-progress-bar {
     width: 100%;
-    text-align: left;
-    transition: all 0.3s ease;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
 }
 
-.step.active {
-    background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
-    color: white;
-    font-weight: 600;
-}
-
-#topicList {
-    text-align: left;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.topic-item {
-    padding: 0.5rem 1rem;
-    margin: 0.3rem 0;
-    background: #f8f9fa;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-}
-
-.topic-item.generating {
-    background: #fff3cd;
-    border-left: 3px solid #ffc107;
-}
-
-.topic-item.completed {
-    background: #d4edda;
-    border-left: 3px solid #28a745;
-}
-
-.topic-item-icon {
-    font-size: 1.2rem;
+.loading-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%);
+    width: 0%;
+    transition: width 0.5s ease;
 }
 </style>
 
 <script>
-document.querySelector('.create-project-form').addEventListener('submit', function(e) {
-    // Show loading overlay
-    document.getElementById('loadingOverlay').style.display = 'flex';
+document.addEventListener('DOMContentLoaded', function() {
+    const perFileConfig = document.getElementById('perFileConfig');
+    const aiTopicsConfig = document.getElementById('aiTopicsConfig');
+    const strategyPerFile = document.getElementById('strategy-per-file');
+    const strategyAi = document.getElementById('strategy-ai');
+    const useAiCounts = document.getElementById('use-ai-counts');
+    const useDefaultCount = document.getElementById('use-default-count');
+    const defaultCountInput = document.getElementById('default_count');
+    const cardCountInputs = document.querySelectorAll('.card-count-input');
     
-    // Animate through steps with realistic timing
-    const steps = document.querySelectorAll('.step');
+    // Toggle between configurations
+    function updateConfigDisplay() {
+        if (strategyPerFile.checked) {
+            perFileConfig.style.display = 'block';
+            aiTopicsConfig.style.display = 'none';
+        } else {
+            perFileConfig.style.display = 'none';
+            aiTopicsConfig.style.display = 'block';
+        }
+    }
     
-    // Start with step 1 active
-    steps[0].classList.add('active');
+    strategyPerFile.addEventListener('change', updateConfigDisplay);
+    strategyAi.addEventListener('change', updateConfigDisplay);
     
-    // Move to step 2 after 5 seconds (topics extracted)
-    setTimeout(() => {
-        steps[0].classList.remove('active');
-        steps[1].classList.add('active');
-        
-        // Show topic progress
-        showTopicProgress();
-    }, 5000);
+    // Handle count mode changes
+    function updateCardCounts() {
+        if (useAiCounts.checked) {
+            // Set all cards to AI-suggested values
+            cardCountInputs.forEach(input => {
+                const aiCount = parseInt(input.dataset.aiCount);
+                input.value = aiCount;
+            });
+        } else {
+            // Set all cards to user's default value
+            const defaultValue = parseInt(defaultCountInput.value) || 25;
+            cardCountInputs.forEach(input => {
+                input.value = defaultValue;
+            });
+        }
+        updatePerFileTotal();
+    }
     
-    // Step 2 stays active for the flashcard generation
-    // Step 3 will show briefly when page redirects (if needed)
-});
-
-function showTopicProgress() {
-    const topicProgress = document.getElementById('topicProgress');
-    const topicList = document.getElementById('topicList');
+    useAiCounts.addEventListener('change', updateCardCounts);
+    useDefaultCount.addEventListener('change', updateCardCounts);
     
-    // Get topics from the preview
-    const topicCards = document.querySelectorAll('.topic-card');
-    const topics = [];
-    topicCards.forEach(card => {
-        const name = card.querySelector('.topic-name').textContent;
-        const count = card.querySelector('.topic-cards-count').textContent;
-        topics.push({ name, count });
+    // Update default count for all topics
+    defaultCountInput.addEventListener('change', function() {
+        if (useDefaultCount.checked) {
+            const defaultValue = parseInt(this.value) || 25;
+            cardCountInputs.forEach(input => {
+                input.value = defaultValue;
+            });
+            updatePerFileTotal();
+        }
     });
     
-    if (topics.length > 0) {
-        topicProgress.style.display = 'block';
-        
-        // Add all topics to list
-        topics.forEach((topic, index) => {
-            const item = document.createElement('div');
-            item.className = 'topic-item';
-            item.innerHTML = `<span class="topic-item-icon">⏳</span> <span>${topic.name} (${topic.count})</span>`;
-            topicList.appendChild(item);
-            
-            // Simulate progress by marking as generating/completed over time
-            setTimeout(() => {
-                item.classList.add('generating');
-                item.querySelector('.topic-item-icon').textContent = '⚙️';
-            }, index * 2000);
-            
-            setTimeout(() => {
-                item.classList.remove('generating');
-                item.classList.add('completed');
-                item.querySelector('.topic-item-icon').textContent = '✅';
-            }, (index + 1) * 8000); // Assume 8 seconds per topic
+    // Update total cards for per-file strategy
+    cardCountInputs.forEach(input => {
+        input.addEventListener('input', updatePerFileTotal);
+    });
+    
+    function updatePerFileTotal() {
+        let total = 0;
+        cardCountInputs.forEach(input => {
+            total += parseInt(input.value) || 0;
         });
+        document.getElementById('perFileTotalCards').textContent = total;
     }
-}
+    
+    // Update total cards for AI strategy
+    const aiCardCountInputs = document.querySelectorAll('.ai-card-count-input');
+    aiCardCountInputs.forEach(input => {
+        input.addEventListener('input', updateAiTotal);
+    });
+    
+    function updateAiTotal() {
+        let total = 0;
+        aiCardCountInputs.forEach(input => {
+            total += parseInt(input.value) || 0;
+        });
+        document.getElementById('aiTotalCards').textContent = total;
+    }
+    
+    // Form submission with AJAX and real-time progress
+    document.getElementById('projectForm').addEventListener('submit', function(e) {
+        e.preventDefault(); // Prevent default form submission
+        
+        // Show loading overlay
+        const overlay = document.getElementById('loadingOverlay');
+        overlay.style.display = 'flex';
+        
+        // Get total topics and cards
+        let totalTopics, totalCards;
+        if (strategyPerFile.checked) {
+            totalTopics = parseInt(document.getElementById('perFileTotalTopics').textContent);
+            totalCards = parseInt(document.getElementById('perFileTotalCards').textContent);
+        } else {
+            totalTopics = parseInt(document.getElementById('aiTotalTopics').textContent);
+            totalCards = parseInt(document.getElementById('aiTotalCards').textContent);
+        }
+        
+        const progressFill = document.getElementById('progressFill');
+        const loadingStatus = document.getElementById('loadingStatus');
+        const loadingPhase = document.getElementById('loadingPhase');
+        
+        // Submit form via AJAX
+        const formData = new FormData(this);
+        
+        fetch('/create-project-from-documents', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show completion
+                progressFill.style.width = '100%';
+                loadingPhase.textContent = '✅ Project created successfully!';
+                loadingStatus.textContent = `Generated ${totalCards} flashcards across ${totalTopics} topics`;
+                
+                // Redirect after short delay
+                setTimeout(() => {
+                    window.location.href = data.redirect_url;
+                }, 1500);
+            } else {
+                // Show error
+                overlay.style.display = 'none';
+                alert('Error creating project: ' + (data.error || 'Unknown error'));
+                window.location.reload();
+            }
+        })
+        .catch(error => {
+            overlay.style.display = 'none';
+            alert('Failed to create project: ' + error.message);
+            window.location.reload();
+        });
+        
+        // Start progress tracking (update UI every second)
+        let currentTopic = 0;
+        const progressInterval = setInterval(() => {
+            // Update progress bar based on topics completed
+            currentTopic++;
+            if (currentTopic > totalTopics) currentTopic = totalTopics;
+            
+            const progress = (currentTopic / totalTopics) * 100;
+            progressFill.style.width = progress + '%';
+            
+            // Update status text
+            if (currentTopic <= totalTopics) {
+                loadingStatus.textContent = `Generating topic ${currentTopic} of ${totalTopics}...`;
+            }
+        }, 45000 / totalTopics); // Distribute across estimated time
+        
+        // Clear interval when done
+        window.addEventListener('beforeunload', () => clearInterval(progressInterval));
+    });
+});
 </script>
 {% endblock %}
-

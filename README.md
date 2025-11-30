@@ -12,9 +12,10 @@ This flash card application helps users learn and test their knowledge based on 
   
 - **📁 Drag & Drop Project Creation:**
   - Simply drag and drop documents (PDF, Word, or Text files) to create a new project
-  - AI automatically generates a descriptive project name
-  - AI extracts key topics and determines optimal flashcard count per topic
-  - Minimal user input required - ADHD-friendly design
+  - **Two topic strategies:** One topic per file (perfect for lessons) OR AI-extracted topics
+  - **Full customization:** Edit topic names and flashcard counts before generation
+  - AI automatically generates a descriptive project name from all your content
+  - Clean, intuitive configuration UI
   
 - **🤖 AI-Powered Generation:**
   - Automatic flashcard generation from document content
@@ -268,6 +269,9 @@ If you have data from an older version, these files will be automatically migrat
 
 ## Additional Documentation
 
+- **[What's New](WHATS_NEW.md)** - **📢 READ THIS!** Latest features and improvements
+- **[Project Creation Guide](PROJECT_CREATION_GUIDE.md)** - **NEW!** Complete guide to creating projects with full control over topics and flashcard generation
+- **[Flashcard Count Control](FLASHCARD_COUNT_CONTROL.md)** - **NEW!** How to use AI-suggested vs custom flashcard counts per topic
 - **[Mastery System Guide](MASTERY_SYSTEM_GUIDE.md)** - Complete guide to the card mastery and spaced repetition system
 - **[Answer Explanations Guide](EXPLANATION_FEATURE.md)** - How AI-generated explanations enhance your learning
 - **[Installation Guide](INSTALLATION_GUIDE.md)** - Detailed installation instructions for all platforms

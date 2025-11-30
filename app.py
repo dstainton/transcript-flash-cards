@@ -11,6 +11,7 @@ import secrets
 from collections import defaultdict
 from project_manager import ProjectManager, Project
 from migrate_to_projects import migrate
+import threading
 
 def install_and_import(package):
     try:
@@ -86,6 +87,9 @@ migrate()
 print("Initializing Project Manager...")
 project_manager = ProjectManager()
 print(f"[OK] Found {len(project_manager.projects)} project(s)\n")
+
+# Global progress tracking for async project creation
+creation_progress = {}
 
 # Configurable parameters
 CARDS_PER_TRANSCRIPT = 25  # Default number of cards per transcript
@@ -318,15 +322,18 @@ def generate_flashcards(transcript, filename, main_topic=None):
         print(f"  Error generating flashcards: {e}")
         return []
 
-def generate_project_name_from_text(text):
+def generate_project_name_from_text(text, is_multi_document=False, document_count=1):
     """Use AI to generate a concise project name from document text"""
-    # Truncate text to avoid token limits (first 3000 characters)
-    sample_text = text[:3000]
+    # Take a good sample from the text (first 4000 characters for better context)
+    sample_text = text[:4000]
+    
+    multi_doc_context = f"\n\nNote: This content is from {document_count} different documents. Generate a name that encompasses the overall theme." if is_multi_document and document_count > 1 else ""
     
     prompt = f"""
     Based on the following document content, generate a short, concise project name (3-6 words max).
-    The name should capture the main topic or subject matter.
-    Respond with ONLY the project name, nothing else.
+    The name should capture the main topic, subject matter, or course title.
+    If this appears to be a certification course or structured learning material, include that in the name.
+    Respond with ONLY the project name, nothing else.{multi_doc_context}
     
     Document content:
     {sample_text}
@@ -336,7 +343,7 @@ def generate_project_name_from_text(text):
         response = client.chat.completions.create(
             model="gpt-4o-mini",  # Use mini for simple tasks
             messages=[
-                {"role": "system", "content": "You generate concise, descriptive project names."},
+                {"role": "system", "content": "You generate concise, descriptive project names for educational content and courses."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=50,
@@ -353,22 +360,107 @@ def generate_project_name_from_text(text):
         print(f"Error generating project name: {e}")
         return "New Project"
 
-def extract_topics_from_text(text):
-    """Use AI to extract topics and determine flashcard count per topic"""
-    # Truncate text to avoid token limits (first 5000 characters)
-    sample_text = text[:5000]
+def suggest_optimal_flashcard_count(text, topic_name=""):
+    """Use AI to analyze content and suggest optimal flashcard count for a single topic/document"""
+    # Analyze the text to determine appropriate flashcard count
+    text_length = len(text)
+    word_count = len(text.split())
+    
+    # Take a good sample for AI analysis
+    sample_text = text[:3000]
+    
+    topic_context = f" about '{topic_name}'" if topic_name else ""
     
     prompt = f"""
-    Analyze the following document content and extract 3-8 main topics/sections.
-    For each topic, suggest an appropriate number of flashcards (5-25 per topic).
+    Analyze this educational content{topic_context} and determine the optimal number of flashcards to generate.
+    
+    Content length: {word_count} words
+    
+    Consider:
+    - Content complexity and depth
+    - Number of distinct concepts covered
+    - Appropriate coverage without redundancy
+    - Effective learning (not too few, not too many)
+    
+    Respond with ONLY a JSON object in this exact format:
+    {{"optimal_count": 15, "reasoning": "Brief 1-sentence explanation"}}
+    
+    Suggest between 5 and 50 flashcards.
+    
+    Content sample:
+    {sample_text}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are an expert at analyzing educational content and determining optimal learning material quantities."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=100,
+            temperature=0.3,
+        )
+        
+        result_json = response.choices[0].message.content.strip()
+        
+        # Remove markdown code blocks if present
+        if result_json.startswith('```'):
+            first_newline = result_json.find('\n')
+            last_marker = result_json.rfind('```')
+            if first_newline != -1 and last_marker != -1:
+                result_json = result_json[first_newline+1:last_marker].strip()
+        
+        result = json.loads(result_json)
+        optimal_count = result.get('optimal_count', 25)
+        reasoning = result.get('reasoning', 'Based on content analysis')
+        
+        # Clamp to reasonable range
+        optimal_count = max(5, min(50, optimal_count))
+        
+        print(f"AI suggests {optimal_count} flashcards for '{topic_name}': {reasoning}")
+        return optimal_count, reasoning
+    
+    except Exception as e:
+        print(f"Error getting optimal flashcard count: {e}")
+        # Fallback: estimate based on text length
+        if word_count < 500:
+            return 10, "Short content"
+        elif word_count < 1500:
+            return 20, "Medium length content"
+        else:
+            return 25, "Substantial content"
+
+def extract_topics_from_text(text):
+    """Use AI to extract topics and determine flashcard count per topic"""
+    # Take a larger sample for better analysis
+    sample_text = text[:8000]
+    word_count = len(text.split())
+    
+    prompt = f"""
+    Analyze this educational content and identify the optimal number of distinct learning topics.
+    
+    Content length: {word_count} words
+    
+    Your task:
+    1. Understand the overall subject matter and learning objectives
+    2. Identify natural topic divisions that aid learning and retention
+    3. Determine how many topics makes most sense pedagogically (no min/max constraints)
+    4. For each topic, suggest an appropriate number of flashcards based on complexity
+    
+    Guidelines:
+    - Create as many or as few topics as needed for effective learning
+    - Topics should represent meaningful knowledge domains
+    - Each topic should be substantial enough to warrant separate study
+    - Don't force a specific number - let the content guide you
+    - Flashcard counts should match topic complexity (5-50 per topic)
     
     Return your response as a JSON array of objects with this exact structure:
-    [{{"name": "Topic Name", "flashcard_count": 10}}]
+    [{{"name": "Topic Name", "flashcard_count": 15}}]
     
-    Consider the complexity and importance of each topic when determining flashcard counts.
     Respond with ONLY the JSON array, no additional text.
     
-    Document content:
+    Content:
     {sample_text}
     """
     
@@ -532,6 +624,40 @@ def get_mastery_stats():
 
 @app.route('/')
 def index():
+    # Auto-save any active unsaved session before going home
+    if 'mode' in session and not session.get('results_saved', False):
+        mode = session['mode']
+        score = session.get('score', 0)
+        total = session.get('current_card_index', 0)
+        
+        # Only save if user has answered at least one card
+        if total > 0:
+            timestamp = datetime.now()
+            percentage = calculate_percentage(score, total)
+            
+            # Save to project history
+            project = get_current_project()
+            project.load_history()
+            if mode == 'exam':
+                project.history['exam_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', [])
+                }
+            else:
+                cards_mastered = session.get('cards_mastered_this_session', 0)
+                project.history['study_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', []),
+                    'cards_mastered': cards_mastered
+                }
+            project.save_history()
+            session['results_saved'] = True
+            flash(f'Session progress saved: {score}/{total} ({percentage:.1f}%)', 'info')
+    
     return render_template('index.html')
 
 @app.route('/test')
@@ -548,9 +674,20 @@ def test():
         f.write("TEST ROUTE CALLED\n")
     return "Test route working!"
 
+@app.route('/creation-progress/<progress_id>')
+def get_creation_progress(progress_id):
+    """Get progress of project creation"""
+    if progress_id in creation_progress:
+        return jsonify(creation_progress[progress_id])
+    return jsonify({'status': 'not_found'}), 404
 
 @app.route('/start', methods=['GET', 'POST'])
 def start():
+    # Check if we just created a project and show success message
+    if 'creation_success' in session:
+        success_data = session.pop('creation_success')
+        flash(f'Project "{success_data["project_name"]}" created with {success_data["flashcard_count"]} flashcards across {success_data["topic_count"]} topics!', 'success')
+    
     if request.method == 'POST':
         print(f"\n===== START ROUTE POST REQUEST =====")
         
@@ -1078,9 +1215,44 @@ def results():
 
 @app.route('/stats')
 def stats():
+    # Auto-save any active unsaved session before showing stats
+    if 'mode' in session and not session.get('results_saved', False):
+        mode = session['mode']
+        score = session.get('score', 0)
+        total = session.get('current_card_index', 0)
+        
+        # Only save if user has answered at least one card
+        if total > 0:
+            timestamp = datetime.now()
+            percentage = calculate_percentage(score, total)
+            
+            # Save to project history
+            project = get_current_project()
+            project.load_history()  # Load existing history before adding new entry
+            if mode == 'exam':
+                project.history['exam_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', [])
+                }
+            else:
+                cards_mastered = session.get('cards_mastered_this_session', 0)
+                project.history['study_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', []),
+                    'cards_mastered': cards_mastered
+                }
+            project.save_history()
+            session['results_saved'] = True  # Mark as saved
+            flash(f'Session progress saved: {score}/{total} ({percentage:.1f}%)', 'info')
+    
     project = get_current_project()
     project.load_history()
-    return render_template('stats.html', 
+    return render_template('stats.html',
+                         current_project=project,
                          exam_history=project.history.get('exam_history', {}),
                          study_history=project.history.get('study_history', {}),
                          all_time_scores=project.history.get('all_time_scores', {}))
@@ -1088,8 +1260,44 @@ def stats():
 @app.route('/mastery')
 def mastery():
     """Show mastery progress for all topics"""
+    # Auto-save any active unsaved session before showing mastery
+    if 'mode' in session and not session.get('results_saved', False):
+        mode = session['mode']
+        score = session.get('score', 0)
+        total = session.get('current_card_index', 0)
+        
+        # Only save if user has answered at least one card
+        if total > 0:
+            timestamp = datetime.now()
+            percentage = calculate_percentage(score, total)
+            
+            # Save to project history
+            project = get_current_project()
+            project.load_history()
+            if mode == 'exam':
+                project.history['exam_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', [])
+                }
+            else:
+                cards_mastered = session.get('cards_mastered_this_session', 0)
+                project.history['study_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', []),
+                    'cards_mastered': cards_mastered
+                }
+            project.save_history()
+            session['results_saved'] = True
+            flash(f'Session progress saved: {score}/{total} ({percentage:.1f}%)', 'info')
+    
+    project = get_current_project()
     mastery_stats = get_mastery_stats()
-    return render_template('mastery.html', 
+    return render_template('mastery.html',
+                         current_project=project,
                          mastery_stats=mastery_stats)
 
 @app.route('/reset_mastery/<topic>', methods=['POST'])
@@ -1102,6 +1310,40 @@ def reset_mastery(topic):
 @app.route('/manage-projects')
 def manage_projects():
     """Show project management page"""
+    # Auto-save any active unsaved session before showing projects
+    if 'mode' in session and not session.get('results_saved', False):
+        mode = session['mode']
+        score = session.get('score', 0)
+        total = session.get('current_card_index', 0)
+        
+        # Only save if user has answered at least one card
+        if total > 0:
+            timestamp = datetime.now()
+            percentage = calculate_percentage(score, total)
+            
+            # Save to project history
+            project = get_current_project()
+            project.load_history()
+            if mode == 'exam':
+                project.history['exam_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', [])
+                }
+            else:
+                cards_mastered = session.get('cards_mastered_this_session', 0)
+                project.history['study_history'][timestamp] = {
+                    'score': score,
+                    'total': total,
+                    'percentage': percentage,
+                    'topics': session.get('topics', []),
+                    'cards_mastered': cards_mastered
+                }
+            project.save_history()
+            session['results_saved'] = True
+            flash(f'Session progress saved: {score}/{total} ({percentage:.1f}%)', 'info')
+    
     projects = []
     for proj_id, proj in project_manager.projects.items():
         proj.load_flashcards()
@@ -1180,16 +1422,17 @@ def upload_documents():
                 if file.filename == '':
                     continue
                 
-                filename = secure_filename(file.filename)
+                original_filename = file.filename
+                safe_filename = secure_filename(file.filename)
                 
                 # Check if file type is supported
-                if not processor.is_supported_file(filename):
-                    errors.append(f"{filename}: Unsupported file type")
+                if not processor.is_supported_file(safe_filename):
+                    errors.append(f"{original_filename}: Unsupported file type")
                     continue
                 
-                filepath = os.path.join(temp_dir, filename)
+                filepath = os.path.join(temp_dir, safe_filename)
                 file.save(filepath)
-                uploaded_files.append(filepath)
+                uploaded_files.append({'original': original_filename, 'path': filepath})
             
             if not uploaded_files:
                 return jsonify({
@@ -1198,8 +1441,9 @@ def upload_documents():
                     'errors': errors
                 }), 400
             
-            # Extract text from documents
-            results, processing_errors = processor.process_multiple_documents(uploaded_files)
+            # Extract text from documents (pass file paths)
+            file_paths = [f['path'] for f in uploaded_files]
+            results, processing_errors = processor.process_multiple_documents(file_paths)
             
             if processing_errors:
                 errors.extend([f"{k}: {v}" for k, v in processing_errors.items()])
@@ -1211,16 +1455,48 @@ def upload_documents():
                     'errors': errors
                 }), 400
             
-            # Combine all extracted text
-            combined_text = '\n\n'.join([
-                f"=== {filename} ===\n{text}" 
-                for filename, text in results.items()
-            ])
+            # Store per-file extracted text (NOT combined)
+            documents_data = []
+            for file_info in uploaded_files:
+                original_filename = file_info['original']
+                filepath = file_info['path']
+                safe_filename = os.path.basename(filepath)
+                
+                # Get extracted text for this file
+                text = results.get(safe_filename, '')
+                if not text:
+                    continue
+                
+                # Use ORIGINAL filename as topic name, just remove the file extension
+                topic_name = os.path.splitext(original_filename)[0]  # Remove extension only
+                # Keep everything else: spaces, numbers, "Lesson XX", etc.
+                
+                # Get AI suggestion for optimal flashcard count for this document
+                try:
+                    ai_count, ai_reasoning = suggest_optimal_flashcard_count(text, topic_name)
+                except Exception as e:
+                    print(f"Error getting AI count suggestion for {topic_name}: {e}")
+                    ai_count = 25  # Fallback
+                    ai_reasoning = "Default count"
+                
+                documents_data.append({
+                    'original_filename': original_filename,
+                    'display_filename': original_filename,
+                    'filepath': filepath,
+                    'text': text,
+                    'suggested_topic': topic_name,
+                    'text_length': len(text),
+                    'ai_suggested_count': ai_count,
+                    'ai_reasoning': ai_reasoning
+                })
+            
+            # Combine all text for project name generation
+            combined_text = '\n\n'.join([doc['text'] for doc in documents_data])
             
             # Store information in session for project creation
             session['pending_project'] = {
-                'documents': uploaded_files,
-                'extracted_text': combined_text,
+                'documents_data': documents_data,
+                'combined_text': combined_text,
                 'document_count': len(results),
                 'timestamp': datetime.now().isoformat()
             }
@@ -1261,12 +1537,12 @@ def create_project_from_documents():
     
     if request.method == 'POST':
         try:
-            # Get custom project name if provided, otherwise use AI-generated
+            # Get custom project name
             project_name = request.form.get('project_name', '').strip()
             
             if not project_name:
-                # Use AI to generate project name
-                project_name = generate_project_name_from_text(pending['extracted_text'])
+                flash('Project name is required', 'error')
+                return redirect(url_for('create_project_from_documents'))
             
             # Check for duplicate names and append number if needed
             original_name = project_name
@@ -1276,40 +1552,87 @@ def create_project_from_documents():
                 counter += 1
                 project_name = f"{original_name} ({counter})"
             
-            # Extract topics using AI
-            topics = extract_topics_from_text(pending['extracted_text'])
-            
-            if not topics:
-                flash('Failed to extract topics from documents', 'error')
-                return redirect(url_for('create_project_from_documents'))
+            # Get topic configuration strategy
+            topic_strategy = request.form.get('topic_strategy', 'one-per-file')
             
             # Create the new project
             new_project = project_manager.create_project(project_name)
             
             # Move uploaded documents to project's documents folder
             import shutil
-            for temp_filepath in pending['documents']:
-                if os.path.exists(temp_filepath):
+            for doc_data in pending['documents_data']:
+                temp_filepath = doc_data['filepath']
+                if temp_filepath and os.path.exists(temp_filepath):
                     filename = os.path.basename(temp_filepath)
                     dest_path = os.path.join(new_project.documents_folder, filename)
                     shutil.move(temp_filepath, dest_path)
             
-            # Generate flashcards for each topic
+            # Prepare topics list for generation
+            topics_to_generate = []
+            
+            if topic_strategy == 'one-per-file':
+                for i, doc_data in enumerate(pending['documents_data']):
+                    topic_name = request.form.get(f'topic_name_{i}', doc_data['suggested_topic']).strip()
+                    num_cards = int(request.form.get(f'card_count_{i}', doc_data.get('ai_suggested_count', 25)))
+                    topics_to_generate.append({
+                        'name': topic_name,
+                        'text': doc_data['text'],
+                        'count': num_cards
+                    })
+            else:
+                num_topics_input = int(request.form.get('num_topics', 0))
+                for i in range(num_topics_input):
+                    topic_name = request.form.get(f'ai_topic_name_{i}', '').strip()
+                    num_cards = int(request.form.get(f'ai_card_count_{i}', 10))
+                    if topic_name:
+                        topics_to_generate.append({
+                            'name': topic_name,
+                            'text': pending['combined_text'],
+                            'count': num_cards
+                        })
+            
+            # Generate progress ID
+            progress_id = secrets.token_hex(8)
+            creation_progress[progress_id] = {
+                'status': 'starting',
+                'current_topic': 0,
+                'total_topics': len(topics_to_generate),
+                'current_topic_name': '',
+                'flashcards_generated': 0,
+                'project_id': new_project.id
+            }
+            
+            # Generate flashcards with progress tracking
             total_flashcards_generated = 0
-            for topic_info in topics:
-                topic_name = topic_info['name']
-                num_cards = topic_info['flashcard_count']
+            for idx, topic_info in enumerate(topics_to_generate):
+                # Update progress
+                creation_progress[progress_id].update({
+                    'status': 'generating',
+                    'current_topic': idx + 1,
+                    'current_topic_name': topic_info['name']
+                })
                 
-                # Extract relevant text for this topic (simplified - uses all text for now)
+                print(f"[{idx+1}/{len(topics_to_generate)}] Generating {topic_info['count']} flashcards for: {topic_info['name']}")
+                
+                # Generate flashcards
                 topic_flashcards = generate_flashcards_from_text(
-                    pending['extracted_text'],
-                    topic_name,
-                    num_cards
+                    topic_info['text'],
+                    topic_info['name'],
+                    topic_info['count']
                 )
                 
                 # Add to project
                 new_project.flashcards.extend(topic_flashcards)
                 total_flashcards_generated += len(topic_flashcards)
+                
+                # Update progress
+                creation_progress[progress_id]['flashcards_generated'] = total_flashcards_generated
+            
+            num_topics = len(topics_to_generate)
+            
+            # Mark progress as complete
+            creation_progress[progress_id]['status'] = 'complete'
+            creation_progress[progress_id]['flashcards_generated'] = total_flashcards_generated
             
             # Save the project
             new_project.save_flashcards()
@@ -1326,32 +1649,64 @@ def create_project_from_documents():
             # Clear pending project from session
             del session['pending_project']
             
-            # Set as current project
+            # Set as current project and reload its data
             set_current_project(new_project.id)
             
-            flash(f'Project "{project_name}" created with {total_flashcards_generated} flashcards across {len(topics)} topics!', 'success')
-            return redirect(url_for('start'))
+            # IMPORTANT: Reload the project from project_manager to ensure latest data
+            current_proj = project_manager.get_project(new_project.id)
+            if current_proj:
+                current_proj.load_flashcards()
+                current_proj.load_mastery()
+                current_proj.load_history()
+            
+            # Store success message in session for after redirect
+            session['creation_success'] = {
+                'project_name': project_name,
+                'flashcard_count': total_flashcards_generated,
+                'topic_count': num_topics,
+                'progress_id': progress_id
+            }
+            
+            # Return success with redirect URL
+            return jsonify({
+                'success': True,
+                'redirect_url': url_for('start'),
+                'message': f'Project "{project_name}" created with {total_flashcards_generated} flashcards!'
+            })
         
         except Exception as e:
-            flash(f'Error creating project: {str(e)}', 'error')
+            error_msg = str(e)
             print(f"Error in create_project_from_documents: {e}")
             import traceback
             traceback.print_exc()
-            return redirect(url_for('create_project_from_documents'))
+            return jsonify({
+                'success': False,
+                'error': f'Error creating project: {error_msg}'
+            }), 500
     
-    # GET request - show project setup page
-    # Generate AI suggestions
+    # GET request - show project setup page with configuration options
+    # Generate AI suggestions for project name (consider all documents)
     try:
-        suggested_name = generate_project_name_from_text(pending['extracted_text'])
-        suggested_topics = extract_topics_from_text(pending['extracted_text'])
+        suggested_name = generate_project_name_from_text(
+            pending['combined_text'],
+            is_multi_document=True,
+            document_count=pending['document_count']
+        )
     except Exception as e:
-        print(f"Error generating AI suggestions: {e}")
+        print(f"Error generating project name: {e}")
         suggested_name = "New Project"
-        suggested_topics = []
+    
+    # Generate AI-extracted topics as an option
+    try:
+        ai_topics = extract_topics_from_text(pending['combined_text'])
+    except Exception as e:
+        print(f"Error extracting AI topics: {e}")
+        ai_topics = []
     
     return render_template('create_project.html',
                          suggested_name=suggested_name,
-                         suggested_topics=suggested_topics,
+                         documents_data=pending['documents_data'],
+                         ai_topics=ai_topics,
                          document_count=pending['document_count'])
 
 # Update the route decorator to match the name used in templates

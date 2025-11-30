@@ -6,6 +6,11 @@
 <div class="stats-container">
     <div class="card stats-card">
         <h1>Card Mastery Progress</h1>
+        {% if current_project %}
+        <div class="project-indicator">
+            <strong>Project:</strong> {{ current_project.name }}
+        </div>
+        {% endif %}
         <p class="mastery-description">
             Track your learning progress across all topics. Cards become "mastered" when you answer them correctly 3 times in a row during study sessions. Mastered cards won't appear in future study sessions for that topic.
         </p>
