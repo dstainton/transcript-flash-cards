@@ -8,6 +8,9 @@ from datetime import datetime, timedelta
 import subprocess
 import sys
 import secrets
+
+# Get the base directory where app.py is located (for finding .git, VERSION, etc.)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 from collections import defaultdict
 from project_manager import ProjectManager, Project
 from migrate_to_projects import migrate
@@ -2337,13 +2340,13 @@ def get_current_version():
     try:
         # Try to get the current tag
         result = subprocess.run(['git', 'describe', '--tags', '--exact-match'],
-                              capture_output=True, text=True, timeout=5)
+                              capture_output=True, text=True, timeout=5, cwd=BASE_DIR)
         if result.returncode == 0:
             return result.stdout.strip()
         
         # If not on a tag, get the latest tag we're based on
         result = subprocess.run(['git', 'describe', '--tags', '--abbrev=0'],
-                              capture_output=True, text=True, timeout=5)
+                              capture_output=True, text=True, timeout=5, cwd=BASE_DIR)
         if result.returncode == 0:
             return result.stdout.strip()
         
@@ -2356,11 +2359,11 @@ def get_latest_release_tag():
     try:
         # Fetch tags
         subprocess.run(['git', 'fetch', '--tags'], 
-                      capture_output=True, text=True, timeout=30)
+                      capture_output=True, text=True, timeout=30, cwd=BASE_DIR)
         
         # Get all tags sorted by version
         result = subprocess.run(['git', 'tag', '-l', '--sort=-v:refname'],
-                              capture_output=True, text=True, timeout=10)
+                              capture_output=True, text=True, timeout=10, cwd=BASE_DIR)
         
         if result.returncode != 0:
             return None
@@ -2395,8 +2398,9 @@ def compare_versions(current, latest):
 def check_updates():
     """Check for production release updates from git repository"""
     try:
-        # Check if we're in a git repository
-        if not os.path.exists('.git'):
+        # Check if we're in a git repository (use BASE_DIR to handle running from different directories)
+        git_dir = os.path.join(BASE_DIR, '.git')
+        if not os.path.exists(git_dir):
             return jsonify({
                 'success': False,
                 'error': 'Not a git repository. Please install via git clone for update functionality.'
@@ -2459,8 +2463,9 @@ def check_updates():
 def install_update():
     """Install production release update from git repository"""
     try:
-        # Check if we're in a git repository
-        if not os.path.exists('.git'):
+        # Check if we're in a git repository (use BASE_DIR to handle running from different directories)
+        git_dir = os.path.join(BASE_DIR, '.git')
+        if not os.path.exists(git_dir):
             return jsonify({
                 'success': False,
                 'error': 'Not a git repository'
@@ -2477,7 +2482,7 @@ def install_update():
         
         # Check for uncommitted changes
         result = subprocess.run(['git', 'status', '--porcelain'],
-                              capture_output=True, text=True, timeout=10)
+                              capture_output=True, text=True, timeout=10, cwd=BASE_DIR)
         
         # Only check files that aren't in .gitignore (user data)
         uncommitted = [line for line in result.stdout.split('\n') 
@@ -2493,11 +2498,11 @@ def install_update():
         
         # Fetch latest tags
         subprocess.run(['git', 'fetch', '--tags'], 
-                      capture_output=True, text=True, timeout=30)
+                      capture_output=True, text=True, timeout=30, cwd=BASE_DIR)
         
         # Checkout the latest release tag
         result = subprocess.run(['git', 'checkout', latest_tag],
-                              capture_output=True, text=True, timeout=60)
+                              capture_output=True, text=True, timeout=60, cwd=BASE_DIR)
         
         if result.returncode != 0:
             return jsonify({
