@@ -21,6 +21,7 @@ class Project:
         self.folder = folder_path
         self.flashcards = []
         self.mastery = {}
+        self.excluded = {}
         self.history = {'exam_history': {}, 'study_history': {}, 'all_time_scores': {}}
         
         # Ensure project folder structure exists
@@ -38,6 +39,10 @@ class Project:
     @property
     def mastery_path(self) -> str:
         return os.path.join(self.folder, 'mastery.json')
+    
+    @property
+    def excluded_path(self) -> str:
+        return os.path.join(self.folder, 'excluded.json')
     
     @property
     def history_path(self) -> str:
@@ -92,6 +97,25 @@ class Project:
                 json.dump(self.mastery, f, indent=2)
         except Exception as e:
             print(f"Error saving mastery for project {self.name}: {e}")
+    
+    def load_excluded(self) -> Dict:
+        """Load excluded cards data from project folder"""
+        try:
+            if os.path.exists(self.excluded_path):
+                with open(self.excluded_path, 'r', encoding='utf-8') as f:
+                    self.excluded = json.load(f)
+                return self.excluded
+        except Exception as e:
+            print(f"Error loading excluded cards for project {self.name}: {e}")
+        return {}
+    
+    def save_excluded(self):
+        """Save excluded cards data to project folder"""
+        try:
+            with open(self.excluded_path, 'w', encoding='utf-8') as f:
+                json.dump(self.excluded, f, indent=2)
+        except Exception as e:
+            print(f"Error saving excluded cards for project {self.name}: {e}")
     
     def load_history(self) -> Dict:
         """Load history from project folder"""
@@ -157,6 +181,7 @@ class Project:
         stats = {
             'total_flashcards': len(self.flashcards),
             'mastered_count': len(self.mastery),
+            'excluded_count': len(self.excluded),
             'mastery_percentage': (len(self.mastery) / len(self.flashcards) * 100) if self.flashcards else 0,
             'total_topics': len(topics),
             'total_sessions': len(self.history.get('study_history', {})) + len(self.history.get('exam_history', {})),

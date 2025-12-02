@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Excluded Cards{% endblock %}
+
+{% block content %}
+<div class="card excluded-cards-page">
+    <h1>Excluded Cards</h1>
+    <p class="subtitle">These cards are excluded from both study and exam sessions. You can include them back at any time.</p>
+    
+    {% if total_excluded == 0 %}
+    <div class="empty-state">
+        <p class="empty-icon">📚</p>
+        <p>No cards have been excluded yet.</p>
+        <p class="hint">During study or exam sessions, you can exclude cards you don't want to see again.</p>
+    </div>
+    {% else %}
+    <div class="excluded-summary">
+        <p><strong>{{ total_excluded }}</strong> card(s) currently excluded</p>
+    </div>
+    
+    <div class="excluded-topics">
+        {% for topic, cards in excluded_by_topic.items() %}
+        <div class="topic-section">
+            <h2 class="topic-header">
+                <span class="topic-name">{{ topic }}</span>
+                <span class="topic-count">{{ cards|length }} card(s)</span>
+            </h2>
+            <div class="excluded-cards-list">
+                {% for card in cards %}
+                <div class="excluded-card-item">
+                    <div class="card-content">
+                        <p class="card-question">{{ card.question }}</p>
+                        <p class="card-answer"><strong>Answer:</strong> {{ card.answer }}</p>
+                        {% if card.explanation %}
+                        <p class="card-explanation"><strong>💡 Explanation:</strong> {{ card.explanation }}</p>
+                        {% endif %}
+                        <p class="card-meta">Excluded on: {{ card.excluded_date[:10] if card.excluded_date else 'Unknown' }}</p>
+                    </div>
+                    <div class="card-actions">
+                        <form method="POST" action="{{ url_for('include_card_route') }}" class="include-form">
+                            <input type="hidden" name="card_hash" value="{{ card.hash }}">
+                            <button type="submit" class="include-btn" title="Include this card back into sessions">
+                                ✓ Include Card
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <div class="button-group">
+        <a href="{{ url_for('start') }}" class="button">Back to Sessions</a>
+        <a href="{{ url_for('index') }}" class="button button-secondary">Home</a>
+    </div>
+</div>
+{% endblock %}
+

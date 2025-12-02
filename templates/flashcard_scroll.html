@@ -100,6 +100,12 @@
             {% if error %}
                 <p class="error">{{ error }}</p>
             {% endif %}
+            
+            <div class="card-actions">
+                <button class="exclude-btn small" onclick="excludeCurrentCard('{{ current_card.question|e }}')" title="Exclude this card from future sessions">
+                    🚫 Exclude Card
+                </button>
+            </div>
         </div>
 
         <!-- Separator between current and completed questions -->
@@ -163,6 +169,11 @@
                     <strong>💡 Explanation:</strong> {{ card.explanation if card.explanation else 'No explanation available for this card.' }}
                 </div>
             </div>
+            <div class="card-actions">
+                <button class="exclude-btn small" onclick="excludeCard(this, '{{ card.question|e }}')" title="Exclude this card from future sessions">
+                    🚫 Exclude Card
+                </button>
+            </div>
         </div>
         {% endfor %}
     </div>
@@ -219,6 +230,52 @@ function showNewCardNotification() {
     document.body.appendChild(notification);
     
     // Remove notification after 3 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+// Exclude a card from future sessions
+function excludeCard(button, question) {
+    if (button.disabled) return;
+    
+    fetch('{{ url_for("exclude_card_route") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'question=' + encodeURIComponent(question)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            button.textContent = '✓ Excluded';
+            button.disabled = true;
+            button.classList.add('excluded');
+            showExcludeNotification('Card excluded from future sessions');
+        } else {
+            alert('Failed to exclude card: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Failed to exclude card');
+    });
+}
+
+// Exclude the current card being displayed
+function excludeCurrentCard(question) {
+    const button = event.target;
+    excludeCard(button, question);
+}
+
+// Show notification for exclusion
+function showExcludeNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'new-card-notification exclude-notification';
+    notification.innerHTML = '🚫 ' + message;
+    document.body.appendChild(notification);
+    
     setTimeout(() => {
         notification.remove();
     }, 3000);

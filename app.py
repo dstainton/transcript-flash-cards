@@ -639,6 +639,58 @@ def get_mastery_stats():
     
     return dict(stats)
 
+# Project-aware helper functions for card exclusion
+def exclude_card(card):
+    """Mark a card as excluded in current project"""
+    project = get_current_project()
+    project.load_excluded()
+    card_hash = get_card_hash(card['question'])
+    project.excluded[card_hash] = {
+        'question': card['question'],
+        'answer': card.get('answer', ''),
+        'explanation': card.get('explanation', ''),
+        'topic': card.get('topic', 'Unknown'),
+        'excluded_date': datetime.now().isoformat()
+    }
+    project.save_excluded()
+
+def include_card(card_hash):
+    """Remove exclusion for a card in current project (by hash)"""
+    project = get_current_project()
+    project.load_excluded()
+    if card_hash in project.excluded:
+        del project.excluded[card_hash]
+        project.save_excluded()
+        return True
+    return False
+
+def is_card_excluded(card):
+    """Check if a card is excluded in current project"""
+    project = get_current_project()
+    card_hash = get_card_hash(card['question'])
+    return card_hash in project.excluded
+
+def get_excluded_cards():
+    """Get all excluded cards for current project, grouped by topic"""
+    project = get_current_project()
+    project.load_excluded()
+    
+    excluded_by_topic = defaultdict(list)
+    for card_hash, card_data in project.excluded.items():
+        topic = card_data.get('topic', 'Unknown')
+        excluded_by_topic[topic].append({
+            'hash': card_hash,
+            **card_data
+        })
+    
+    return dict(excluded_by_topic)
+
+def get_excluded_count():
+    """Get count of excluded cards for current project"""
+    project = get_current_project()
+    project.load_excluded()
+    return len(project.excluded)
+
 # Routes
 
 @app.route('/')
@@ -872,6 +924,7 @@ def start():
         project = get_current_project()
         project.load_flashcards()
         project.load_mastery()
+        project.load_excluded()
         
         # Filter flashcards by selected topics if any are selected
         print(f"Selected topics: {selected_topics}")
@@ -884,7 +937,15 @@ def start():
             session['flashcards'] = [card for card in project.flashcards if card['topic'] in selected_topics]
             print(f"Filtered flashcards: {len(session['flashcards'])}")
         
-        # In study mode, filter out already mastered cards
+        # Filter out excluded cards (applies to both study and exam modes)
+        original_count = len(session['flashcards'])
+        session['flashcards'] = [card for card in session['flashcards'] if not is_card_excluded(card)]
+        excluded_count = original_count - len(session['flashcards'])
+        if excluded_count > 0:
+            print(f"Filtered out {excluded_count} excluded cards")
+            flash(f"{excluded_count} card(s) excluded from session", 'info')
+        
+        # In study mode, also filter out already mastered cards
         if session['mode'] == 'study':
             original_count = len(session['flashcards'])
             session['flashcards'] = [card for card in session['flashcards'] if not is_card_mastered(card)]
@@ -1231,22 +1292,23 @@ def results():
     if session.get('results_saved', False):
         # Results already saved, just display them
         if mode == 'exam':
-            user_answers = session.get('user_answers', [])
+            completed_cards = session.get('completed_cards', [])
             score = 0
             results = []
             
-            for answer in user_answers:
-                correct = check_answer(answer['question'], answer['user_answer'], answer['correct_answer'])
+            for card in completed_cards:
+                is_correct = card.get('correct', False)
                 results.append({
-                    'question': answer['question'],
-                    'user_answer': answer['user_answer'],
-                    'correct_answer': answer['correct_answer'],
-                    'is_correct': correct
+                    'question': card['question'],
+                    'user_answer': card['user_answer'],
+                    'correct_answer': card['correct_answer'],
+                    'is_correct': is_correct,
+                    'explanation': card.get('explanation', 'No explanation available.')
                 })
-                if correct:
+                if is_correct:
                     score += 1
                     
-            total_questions = len(user_answers)
+            total_questions = len(completed_cards)
             percentage = calculate_percentage(score, total_questions)
             
             return render_template('results.html',
@@ -1270,22 +1332,23 @@ def results():
     session['results_saved'] = True
     
     if mode == 'exam':
-        user_answers = session.get('user_answers', [])
+        completed_cards = session.get('completed_cards', [])
         score = 0
         results = []
         
-        for answer in user_answers:
-            correct = check_answer(answer['question'], answer['user_answer'], answer['correct_answer'])
+        for card in completed_cards:
+            is_correct = card.get('correct', False)
             results.append({
-                'question': answer['question'],
-                'user_answer': answer['user_answer'],
-                'correct_answer': answer['correct_answer'],
-                'is_correct': correct
+                'question': card['question'],
+                'user_answer': card['user_answer'],
+                'correct_answer': card['correct_answer'],
+                'is_correct': is_correct,
+                'explanation': card.get('explanation', 'No explanation available.')
             })
-            if correct:
+            if is_correct:
                 score += 1
                 
-        total_questions = len(user_answers)
+        total_questions = len(completed_cards)
         percentage = calculate_percentage(score, total_questions)
         
         # Save to project history
@@ -1423,6 +1486,54 @@ def reset_mastery(topic):
     reset_topic_mastery(topic)
     flash(f'Mastery progress reset for "{topic}"', 'success')
     return redirect(url_for('mastery'))
+
+@app.route('/excluded-cards')
+def excluded_cards():
+    """Show excluded cards management page"""
+    project = get_current_project()
+    excluded_by_topic = get_excluded_cards()
+    total_excluded = get_excluded_count()
+    return render_template('excluded_cards.html',
+                         current_project=project,
+                         excluded_by_topic=excluded_by_topic,
+                         total_excluded=total_excluded)
+
+@app.route('/exclude-card', methods=['POST'])
+def exclude_card_route():
+    """Exclude a card from future sessions"""
+    question = request.form.get('question')
+    if not question:
+        return jsonify({'success': False, 'error': 'No question provided'}), 400
+    
+    project = get_current_project()
+    project.load_flashcards()
+    
+    # Find the card by question
+    card = None
+    for c in project.flashcards:
+        if c['question'] == question:
+            card = c
+            break
+    
+    if not card:
+        return jsonify({'success': False, 'error': 'Card not found'}), 404
+    
+    exclude_card(card)
+    return jsonify({'success': True, 'message': 'Card excluded successfully'})
+
+@app.route('/include-card', methods=['POST'])
+def include_card_route():
+    """Include a previously excluded card back into sessions"""
+    card_hash = request.form.get('card_hash')
+    if not card_hash:
+        return jsonify({'success': False, 'error': 'No card hash provided'}), 400
+    
+    if include_card(card_hash):
+        flash('Card has been included back into sessions', 'success')
+        return redirect(url_for('excluded_cards'))
+    else:
+        flash('Card not found in excluded list', 'error')
+        return redirect(url_for('excluded_cards'))
 
 @app.route('/manage-projects')
 def manage_projects():
